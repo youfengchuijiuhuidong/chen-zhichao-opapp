@@ -1,0 +1,61 @@
+# One-shot bootstrap: enable GitHub Pages from branch main, site root /.
+# Does not change application code. Safe to delete after Pages is live.
+name: enable-github-pages
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Pages (main /)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "Repository: $REPO"
+
+          echo "=== POST create legacy main / ==="
+          gh api --method POST "repos/${REPO}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<'JSON'
+          {"build_type":"legacy","source":{"branch":"main","path":"/"}}
+          JSON
+          echo
+
+          echo "=== POST create workflow fallback ==="
+          gh api --method POST "repos/${REPO}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<'JSON'
+          {"build_type":"workflow"}
+          JSON
+          echo
+
+          echo "=== PUT update to legacy main / ==="
+          gh api --method PUT "repos/${REPO}/pages" \
+            -H "Accept: application/vnd.github+json" \
+            --input - <<'JSON'
+          {"build_type":"legacy","source":{"branch":"main","path":"/"}}
+          JSON
+          echo
+
+          echo "=== GET pages ==="
+          if gh api "repos/${REPO}/pages"; then
+            echo
+            echo "=== POST pages/builds ==="
+            gh api --method POST "repos/${REPO}/pages/builds" || true
+            echo
+            echo "Pages is configured."
+            exit 0
+          fi
+
+          echo "Failed to enable GitHub Pages with GITHUB_TOKEN."
+          exit 1
