@@ -230,6 +230,10 @@ html[data-theme="light"] .demo-canvas-wrap{background:#eef2fb}
   border-left:4px solid var(--c2);
   background:linear-gradient(90deg, color-mix(in srgb, var(--c2) 16%, transparent), transparent 72%);
 }
+#intuit{margin:0 0 10px}
+.intuit-row{margin-bottom:10px;line-height:1.7;font-size:13.5px}
+.intuit-row:last-child{margin-bottom:0;color:var(--tx);opacity:0.95}
+.intuit-row strong{color:var(--c2);font-weight:700}
 .layer-2{
   border-left:4px solid var(--c5);
   background:linear-gradient(90deg, color-mix(in srgb, var(--c5) 16%, transparent), transparent 72%);

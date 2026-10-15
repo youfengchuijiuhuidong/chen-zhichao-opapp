@@ -855,7 +855,19 @@
         warn.textContent = "";
       }
     }
-    setText("intuit", o.intuition);
+    const intuitEl = document.getElementById("intuit");
+    if (intuitEl) {
+      if (o.intuition && o.intuition.includes("📐 数学本质")) {
+        const parts = o.intuition.split(/\n\s*\n/);
+        intuitEl.innerHTML = parts.map((p) => {
+          let html = esc(p.trim());
+          html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          return `<div class="intuit-row">${html}</div>`;
+        }).join("");
+      } else {
+        setText("intuit", o.intuition);
+      }
+    }
     const problem = document.getElementById("problem");
     if (problem) problem.textContent = "它要解决的问题：" + (o.problem || "");
     setText("symbol-map", symbol);
