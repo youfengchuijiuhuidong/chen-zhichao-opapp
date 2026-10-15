@@ -285,6 +285,11 @@
         hit: !!custom,
         chromeH: CHROME_H,
         redraw: draw,
+        setHover(spec) {
+          S.hover = spec || null;
+          const wrap = canvas.parentElement;
+          if (wrap) wrap.classList.toggle("is-hover", !!spec);
+        },
         setPhase(p) {
           S.playing = false;
           const n = Math.max(1, S.steps.length);

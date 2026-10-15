@@ -558,7 +558,7 @@
   function opShellHtml() {
     return `<div id="op-page">
       <div class="crumb" id="crumb"></div>
-      <details class="ch-toc" id="ch-toc" open>
+      <details class="ch-toc" id="ch-toc">
         <summary>本章算子（键盘 ← → 同章切换）</summary>
         <div class="ch-toc-list" id="ch-toc-list"></div>
       </details>
@@ -701,7 +701,8 @@
       if (playBtn && anim) playBtn.textContent = anim.isPlaying() ? "暂停" : "播放";
     };
     page.addEventListener("click", (e) => {
-      const t = e.target;
+      const t = (e.target && e.target.closest) ? e.target : (e.target && e.target.parentElement);
+      if (!t || !t.closest) return;
       if (t.closest("#play")) {
         if (!anim) return;
         if (anim.isPlaying()) anim.pause(); else anim.play();
