@@ -147,6 +147,13 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  function hit(S, key, spec) {
+    if (window.OP_MARK_HIT) window.OP_MARK_HIT(S, key, spec);
+  }
+  function hitBox(S, key, box) {
+    if (!box) return;
+    hit(S, key, { type: "box", box: box });
+  }
   function boxOf(S, opt) {
     opt = opt || {};
     const l = opt.l != null ? opt.l : 50;
@@ -718,6 +725,8 @@
       if (S.phase === 1) callout(ctx, m.X(qmu), m.Y(gauss(qmu, qmu, qsig)) - 8, "Q 远离 ⇒ 间隙大", T, T.c6);
       if (S.phase === 2) callout(ctx, m.X(qmu), 56, "优化 Q：KL→0，ELBO 贴上  β=" + fit.toFixed(2), T, T.c4);
       if (S.phase === 3) callout(ctx, 70, 54, "再抬 θ，似然本身上升", T, T.c3);
+      hitBox(S, "state", m.box);
+      hit(S, "energy", { type: "rect", x: rb.x0, y: rb.y0, w: rb.w, h: rb.h });
     },
   });
 
@@ -1776,6 +1785,8 @@
       }
       S.metrics["中心 1/|T'|"] = 1 / Math.max(0.15, Math.abs(1 + eps * dphi(0)));
       legend(ctx, [{ c: T.c2, l: "1/|T'| 热力" }, { c: T.c3, l: "T#Q" }, { c: T.c5, l: "φ 箭头" }], S.W - 150, 48, T);
+      hitBox(S, "state", m.box);
+      hit(S, "ctrl", { type: "rect", x: m.box.x0, y: m.box.y1 - 40, w: m.box.w, h: 36 });
     },
   });
 
@@ -1933,6 +1944,8 @@
         callout(ctx, S.W - 220, 54, "∑Q=" + S.sim.mass.toFixed(3) + (ok ? " 周期守恒" : ""), T, ok ? T.c4 : T.c6);
       }
       legend(ctx, [{ c: T.c2, l: "Q(z,τ)" }, { c: T.c5, l: "速度场 φ" }], S.W - 140, 48, T);
+      hitBox(S, "state", m.box);
+      hit(S, "ctrl", { type: "rect", x: m.box.x0, y: m.box.y0, w: m.box.w, h: Math.max(48, m.box.h * 0.45) });
     },
   });
 
@@ -2484,6 +2497,8 @@
         callout(ctx, 50, 54, "不满足边值的轨迹被丢弃", T, T.c6);
       }
       badge(ctx, 16, S.H - 72, "w=" + w.toFixed(2) + "  λ(T)=" + W.lam[W.n].toFixed(2), T, T.c6);
+      hitBox(S, "state", m1.box);
+      hitBox(S, "adj", m2.box);
     },
   });
 

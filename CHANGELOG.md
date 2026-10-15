@@ -1,5 +1,21 @@
 # CHANGELOG · 算子谱系交互讲义
 
+## 第 6 轮（第二轮 UX：公式 / 联动 / 导航）
+
+纯静态约束不变：无构建步骤、`file://` 可离线、不改 OP_DATA 数学内容、不破坏视口 sessionStorage / Spotlight / dt 钳制 / 脏标记 / 键盘 ←→。
+
+### P0
+- 长公式放进可横向滚动的 `.formula` 容器；详情栅格用 `minmax(0, 1fr)`，避免 KaTeX 把整页撑破。
+- 直觉 / 符号对照 / 严谨定义三层加左侧 Accent bar（蓝 / 橙 / 紫）与浅色铺底，拉开视线层次。
+- 公式关键符号 hover（及符号芯片点击钉住）驱动右侧 Canvas 呼吸高亮。映射在 `js/hover-map.js`，可按算子或 demo 扩展。代表性页：`elbo`、`transport_map`、`continuity_equation`、`pmp_boundary_condition`。
+- 顶部「前置 → 当前 → 衍生」改为可点击迷你节点卡片，当前态描边提示。
+
+### P1
+- 顶栏 ☰ 章节树抽屉 + 详情页可折叠「本章算子」列表。
+- 每条公式「复制 LaTeX」；「复制本页链接」生成 `#/op/<id>`，钉住高亮时带 `?hl=<symbol>`。
+- 切换算子时复用详情壳、KaTeX 节点缓存，避免整页 `innerHTML` 造成公式闪白。
+- ≤1024px 左右栏改为上下堆叠，画布保留 `min-height`，不再 `sticky` 挤没文案。
+
 ## 第 5 轮（Gemini 优化清单落地）
 
 约束仍是：纯静态、可 `file://` 双击、无后端、无构建工具。以 zip 成品为基线，不另套目录。

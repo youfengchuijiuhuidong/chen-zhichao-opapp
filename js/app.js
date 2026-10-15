@@ -143,6 +143,15 @@
     setTheme(cur);
     route();
   });
+  buildToc();
+  const tocBtn = document.getElementById("toc-toggle");
+  const tocClose = document.getElementById("toc-close");
+  const tocBd = document.getElementById("toc-backdrop");
+  if (tocBtn) tocBtn.addEventListener("click", () => setTocOpen(!document.body.classList.contains("toc-open")));
+  if (tocClose) tocClose.addEventListener("click", () => setTocOpen(false));
+  if (tocBd) tocBd.addEventListener("click", () => setTocOpen(false));
+  const tocPanel = document.getElementById("toc-panel");
+  if (tocPanel) tocPanel.hidden = false;
 
   Object.keys(CH).sort().forEach((k) => {
     const meta = CH[k];
@@ -231,7 +240,11 @@
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+  const katexCache = new Map();
   function katexEl(tex, display) {
+    const key = (display ? "d|" : "i|") + tex;
+    let proto = katexCache.get(key);
+    if (proto) return proto.cloneNode(true);
     const d = document.createElement("div");
     d.className = display ? "katex-block" : "katex-inline";
     try {
@@ -240,13 +253,170 @@
       d.textContent = tex;
       d.classList.add("katex-fallback");
     }
+    katexCache.set(key, d.cloneNode(true));
     return d;
   }
 
-  function destroyAnim() {
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.hidden = true; }, 1800);
+  }
+  function copyText(text) {
+    const done = () => toast("已复制");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else fallback();
+    function fallback() {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { toast("复制失败"); }
+      ta.remove();
+    }
+  }
+
+  function parseRoute() {
+    const h = location.hash || "#/";
+    const m = h.match(/^#\/op\/([^/?#]+)(?:\?(.*))?/);
+    if (!m) return { kind: "home" };
+    const params = {};
+    (m[2] || "").split("&").forEach((pair) => {
+      if (!pair) return;
+      const i = pair.indexOf("=");
+      const k = decodeURIComponent(i < 0 ? pair : pair.slice(0, i));
+      const v = decodeURIComponent(i < 0 ? "" : pair.slice(i + 1));
+      if (k) params[k] = v;
+    });
+    return {
+      kind: "op",
+      id: decodeURIComponent(m[1]),
+      hl: params.hl || params.highlight || "",
+    };
+  }
+  function makeOpHash(id, hl) {
+    return "#/op/" + encodeURIComponent(id) + (hl ? "?hl=" + encodeURIComponent(hl) : "");
+  }
+  function pageUrl(id, hl) {
+    const hash = makeOpHash(id, hl);
+    try { return location.href.replace(/#.*$/, "") + hash; } catch (e) { return hash; }
+  }
+
+  let currentOpId = null;
+  let pinnedSym = null;
+  let currentSymbols = [];
+
+  function destroyAnimOnly() {
     if (anim) { anim.destroy(); anim = null; }
+  }
+  function destroyAnim() {
+    destroyAnimOnly();
     if (graph && typeof graph.destroy === "function") graph.destroy();
     graph = null;
+  }
+
+  function setTocOpen(open) {
+    document.body.classList.toggle("toc-open", !!open);
+    const panel = document.getElementById("toc-panel");
+    const bd = document.getElementById("toc-backdrop");
+    const btn = document.getElementById("toc-toggle");
+    if (panel) panel.hidden = false;
+    if (bd) bd.hidden = !open;
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+    try { localStorage.setItem("op-toc-open", open ? "1" : "0"); } catch (e) {}
+  }
+  function buildToc() {
+    const body = document.getElementById("toc-body");
+    if (!body || body.dataset.ready) return;
+    body.dataset.ready = "1";
+    Object.keys(CH).sort().forEach((k) => {
+      const meta = CH[k];
+      const ops = OPS.filter((o) => +o.ch === +k);
+      const det = document.createElement("details");
+      det.className = "toc-ch";
+      det.dataset.ch = k;
+      det.open = true;
+      const sum = document.createElement("summary");
+      sum.innerHTML = `<i class="dot" style="background:${meta.color}"></i><span>${esc(meta.title)}</span><span class="n">${ops.length}</span>`;
+      det.appendChild(sum);
+      const ul = document.createElement("ul");
+      ops.forEach((o) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<a href="#/op/${o.id}" data-id="${o.id}">${esc(o.name)}</a>`;
+        ul.appendChild(li);
+      });
+      det.appendChild(ul);
+      body.appendChild(det);
+    });
+    body.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-id]");
+      if (!a) return;
+      rememberOp(a.dataset.id);
+      if (window.matchMedia && !window.matchMedia("(min-width: 1240px)").matches) setTocOpen(false);
+    });
+  }
+  function syncToc(id) {
+    const o = BY[id];
+    document.querySelectorAll("#toc-body a").forEach((a) => {
+      a.classList.toggle("on", a.dataset.id === id);
+    });
+    document.querySelectorAll("#toc-body .toc-ch").forEach((d) => {
+      if (o) d.open = +d.dataset.ch === +o.ch;
+    });
+    const on = document.querySelector("#toc-body a.on");
+    if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });
+  }
+
+  function hoverSpec(symId) {
+    return currentSymbols.find((s) => s.id === symId) || null;
+  }
+  function applyHover(symId, pin) {
+    const spec = symId ? hoverSpec(symId) : null;
+    if (pin) pinnedSym = spec ? spec.id : null;
+    if (anim && typeof anim.setHover === "function") anim.setHover(spec);
+    document.querySelectorAll(".sym-hit").forEach((el) => {
+      el.classList.toggle("is-on", !!(spec && el.dataset.sym === spec.id));
+    });
+    document.querySelectorAll(".sym-chip").forEach((el) => {
+      el.classList.toggle("on", !!(spec && el.dataset.sym === spec.id));
+    });
+    document.querySelectorAll(".color-legend [data-hit]").forEach((el) => {
+      el.classList.toggle("pulse", !!(spec && spec.targets && spec.targets.indexOf(el.dataset.hit) >= 0));
+    });
+  }
+  function decorateFormulas(root) {
+    if (!root) return;
+    root.querySelectorAll(".sym-hit").forEach((el) => {
+      el.classList.remove("sym-hit", "is-on");
+      delete el.dataset.sym;
+      el.removeAttribute("tabindex");
+      el.removeAttribute("title");
+    });
+    if (!currentSymbols.length) return;
+    const glyphs = [];
+    currentSymbols.forEach((s) => {
+      (s.glyphs || []).forEach((g) => glyphs.push({ g, id: s.id, label: s.label }));
+    });
+    glyphs.sort((a, b) => b.g.length - a.g.length);
+    root.querySelectorAll(".katex span").forEach((el) => {
+      if (el.closest(".sym-hit")) return;
+      if (el.querySelector("span")) return;
+      const t = (el.textContent || "").replace(/\s+/g, "");
+      if (!t) return;
+      const hit = glyphs.find((x) => x.g === t);
+      if (!hit) return;
+      el.classList.add("sym-hit");
+      el.dataset.sym = hit.id;
+      el.setAttribute("tabindex", "0");
+      el.setAttribute("title", "悬停高亮画布：" + hit.label);
+    });
   }
 
   function chapterSiblings(o) {
@@ -255,6 +425,11 @@
 
   function renderHome() {
     destroyAnim();
+    currentOpId = null;
+    pinnedSym = null;
+    currentSymbols = [];
+    document.body.classList.remove("page-op");
+    syncToc("");
     const m = DATA.meta;
     view.innerHTML = `
       <section class="hero">
@@ -331,7 +506,7 @@
     return `<a class="lk" href="#/op/${o.id}" style="border-left-color:${c}">${esc(o.name)}</a>`;
   }
 
-  function lineageBar(o) {
+  function lineageIds(o) {
     const ups = (o.upstream || []).filter((id) => BY[id]);
     const dns = (o.downstream || []).filter((id) => BY[id]);
     const extraUp = [];
@@ -342,113 +517,109 @@
     });
     const pre = ups.concat(extraUp).filter((id, i, a) => a.indexOf(id) === i && BY[id]);
     const post = dns.concat(extraDn).filter((id, i, a) => a.indexOf(id) === i && BY[id]);
-    const chip = (id) => {
-      const x = BY[id];
-      return `<a class="lk lineage-lk" href="#/op/${x.id}">${esc(x.name)}</a>`;
-    };
-    return `<nav class="lineage" aria-label="局部谱系">
-      <div class="lin-col">
+    return { pre, post };
+  }
+  function linCard(id, extraClass) {
+    const x = BY[id];
+    if (!x) return "";
+    const c = (CH[x.ch] || {}).color || "#5b8cff";
+    return `<a class="lin-card ${extraClass || ""}" href="#/op/${x.id}" style="--cc:${c}">
+      <span class="lin-name">${esc(x.name)}</span>
+      <span class="lin-sec">${esc(x.section)}</span>
+    </a>`;
+  }
+  function linCards(ids, limit) {
+    limit = limit || 4;
+    if (!ids.length) return "<span class='muted'>（无）</span>";
+    const shown = ids.slice(0, limit);
+    const more = ids.length - shown.length;
+    return shown.map((id) => linCard(id)).join("") + (more ? `<span class="lin-more">+${more}</span>` : "");
+  }
+  function lineageHtml(o) {
+    const { pre, post } = lineageIds(o);
+    const color = (CH[o.ch] || {}).color || "#5b8cff";
+    return `<div class="lin-col">
         <span class="lin-k">前置依赖</span>
-        <div class="links">${pre.length ? pre.map(chip).join("") : "<span class='muted'>（根节点）</span>"}</div>
+        <div class="lin-cards">${pre.length ? linCards(pre) : "<span class='muted'>（根节点）</span>"}</div>
       </div>
-      <div class="lin-cur" aria-current="page">
+      <div class="lin-arrow" aria-hidden="true">→</div>
+      <div class="lin-card is-current" aria-current="page" style="--cc:${color}">
         <span class="lin-k">当前</span>
-        <strong>${esc(o.name)}</strong>
+        <span class="lin-name">${esc(o.name)}</span>
+        <span class="lin-sec">${esc(o.section)}</span>
       </div>
+      <div class="lin-arrow" aria-hidden="true">→</div>
       <div class="lin-col">
         <span class="lin-k">衍生算子</span>
-        <div class="links">${post.length ? post.map(chip).join("") : "<span class='muted'>（叶节点）</span>"}</div>
-      </div>
-    </nav>`;
+        <div class="lin-cards">${post.length ? linCards(post) : "<span class='muted'>（叶节点）</span>"}</div>
+      </div>`;
   }
 
-  function renderOp(id) {
-    destroyAnim();
-    graph = null;
-    const o = BY[id];
-    if (!o) {
-      view.innerHTML = `<div class="card"><p>找不到算子 ${esc(id)}</p><a href="#/">返回</a></div>`;
-      return;
-    }
-    rememberOp(id);
-    const color = (CH[o.ch] || {}).color;
-    const same = chapterSiblings(o);
-    const idx = same.findIndex((x) => x.id === id);
-    const prev = same[idx - 1];
-    const next = same[idx + 1];
-    const symbol = SYMBOL_MAP[o.demo] || "对照画布：蓝=状态/密度，橙=控制/速度场，紫=协态，绿=能量/熵/代价，灰虚线=基准。";
-    view.innerHTML = `
-      <div class="crumb">
-        <a href="#/">谱系</a><span>/</span>
-        <span>${esc(o.chapter_title)}</span><span>/</span>
-        <strong>${esc(o.name)}</strong>
-      </div>
-      ${lineageBar(o)}
+  function opShellHtml() {
+    return `<div id="op-page">
+      <div class="crumb" id="crumb"></div>
+      <details class="ch-toc" id="ch-toc">
+        <summary>本章算子（键盘 ← → 同章切换）</summary>
+        <div class="ch-toc-list" id="ch-toc-list"></div>
+      </details>
+      <nav class="lineage" id="lineage" aria-label="局部谱系"></nav>
       <div class="detail">
-        <div>
+        <div class="detail-col detail-text">
           <div class="card op-head">
-            <div class="tags">
-              <span class="tag" style="border-color:${color};color:${color}">${esc(o.chapter)}</span>
-              <span class="tag">${esc(o.tag)}</span>
-              <span class="tag">${esc(o.section)}</span>
-              <span class="tag">层级 ${o.level}</span>
+            <div class="op-toolbar">
+              <button type="button" class="lk" id="copy-link">复制本页链接</button>
             </div>
-            <h1>${esc(o.name)}</h1>
-            <div class="en">${esc(o.name_en)} · <code>${esc(o.id)}</code></div>
-            ${o.flag ? `<div class="warnbox"><b>${esc(o.flag)}</b><div>${esc(o.note || "")}</div></div>` : (o.note ? `<div class="warnbox">${esc(o.note)}</div>` : "")}
-
+            <div class="tags" id="tags"></div>
+            <h1 id="op-title"></h1>
+            <div class="en" id="op-en"></div>
+            <div class="warnbox" id="warn" hidden></div>
             <section class="layer layer-1">
               <h2>直觉速览</h2>
-              <p>${esc(o.intuition)}</p>
-              <p class="muted" style="margin-top:8px">它要解决的问题：${esc(o.problem)}</p>
+              <p id="intuit"></p>
+              <p class="muted" id="problem"></p>
             </section>
-
             <section class="layer layer-2">
               <h2>符号与画面对照</h2>
-              <p class="symbol-map">${esc(symbol)}</p>
+              <p class="symbol-map" id="symbol-map"></p>
+              <div class="sym-chips" id="sym-chips"></div>
               <div id="math"></div>
-              <p class="muted" style="margin-top:8px">输入 / 输出：${esc(o.io)}</p>
-              <ol class="step-preview">${(o.steps || []).map((s, i) => `<li>节拍 ${i + 1}：${esc(s)}</li>`).join("")}</ol>
+              <p class="muted" id="io"></p>
+              <ol class="step-preview" id="step-preview"></ol>
             </section>
-
-            <details class="layer layer-3">
+            <details class="layer layer-3" id="layer-strict">
               <summary>严谨定义（展开公式、伪代码与文献）</summary>
               <div class="sec"><h2>数学定义</h2>
-                <p class="muted">论文原文定义式：${esc(o.definition)}</p>
+                <p class="muted" id="definition"></p>
               </div>
-              <div class="sec"><h2>伪代码</h2><pre class="pseudo">${esc(o.pseudo)}</pre></div>
+              <div class="sec"><h2>伪代码</h2><pre class="pseudo" id="pseudo"></pre></div>
               <div class="sec"><h2>典型应用（过程工业 / 风电 / 软测量）</h2><ul class="list" id="apps"></ul></div>
               <div class="sec"><h2>优点</h2><ul class="list" id="pros"></ul></div>
               <div class="sec"><h2>局限</h2><ul class="list" id="cons"></ul></div>
               <div class="sec"><h2>参考资料</h2><ul class="list refs" id="refs"></ul></div>
-              <div class="sec muted">原始出处：${esc(o.source)}<br>原文摘录：「${esc(o.excerpt)}」</div>
+              <div class="sec muted" id="source"></div>
             </details>
-
             <div class="sec"><h2>相关算子</h2>
               <div class="muted">上游</div><div class="links" id="up"></div>
               <div class="muted" style="margin-top:8px">下游</div><div class="links" id="dn"></div>
-              ${o.also_in && o.also_in.length ? `<div class="muted" style="margin-top:8px">同 id 另见</div><div class="also" id="also"></div>` : ""}
+              <div id="also-wrap" hidden><div class="muted" style="margin-top:8px">同 id 另见</div><div class="also" id="also"></div></div>
             </div>
-            <div class="sec nav-ops">
-              ${prev ? `<a class="lk" href="#/op/${prev.id}">← ${esc(prev.name)}</a>` : "<span class='muted'>同章已到开头</span>"}
-              ${next ? `<a class="lk" href="#/op/${next.id}">${esc(next.name)} →</a>` : "<span class='muted'>同章已到末尾</span>"}
-            </div>
+            <div class="sec nav-ops" id="nav-ops"></div>
           </div>
         </div>
-        <div>
+        <div class="detail-col detail-demo">
           <div class="card demo-card">
             <div class="demo-head">
               <h2>逐步动画演示</h2>
-              <p class="demo-op-name">${esc(o.name)}</p>
-              <p class="demo-op-en">${esc(o.name_en)}</p>
+              <p class="demo-op-name" id="demo-name"></p>
+              <p class="demo-op-en" id="demo-en"></p>
             </div>
             <p class="muted">周期 Timeline · 暂停 / 单步 / +1 Step · 点阶段跳转。同章 ← →；空格播放。</p>
-            <div class="demo-canvas-wrap">
+            <div class="demo-canvas-wrap" id="demo-wrap">
               <aside class="color-legend" aria-label="色彩语义">
-                <div><i class="sw sw-state"></i>蓝 · 状态 / 密度</div>
-                <div><i class="sw sw-ctrl"></i>橙 · 控制 / 速度场</div>
-                <div><i class="sw sw-adj"></i>紫 · 协态</div>
-                <div><i class="sw sw-energy"></i>绿 · 能量 / 熵 / 代价</div>
+                <div data-hit="state"><i class="sw sw-state"></i>蓝 · 状态 / 密度</div>
+                <div data-hit="ctrl"><i class="sw sw-ctrl"></i>橙 · 控制 / 速度场</div>
+                <div data-hit="adj"><i class="sw sw-adj"></i>紫 · 协态</div>
+                <div data-hit="energy"><i class="sw sw-energy"></i>绿 · 能量 / 熵 / 代价</div>
                 <div><i class="sw sw-base"></i>灰虚线 · 基准</div>
               </aside>
               <canvas id="demo" width="640" height="360"></canvas>
@@ -457,7 +628,7 @@
               <div class="timeline" id="timeline" role="slider" aria-label="周期进度"></div>
               <div class="caption" id="cap"></div>
             </div>
-            <ol class="step-list" id="steplist">${(o.steps || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+            <ol class="step-list" id="steplist"></ol>
             <div class="controls">
               <button class="primary" id="play" type="button">暂停</button>
               <button id="step" type="button">单步</button>
@@ -468,23 +639,261 @@
             <div class="metrics" id="met"></div>
           </div>
         </div>
-      </div>`;
+      </div>
+    </div>`;
+  }
 
+  function fillList(id, arr) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = (arr || []).map((x) => `<li>${esc(x)}</li>`).join("");
+  }
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text == null ? "" : String(text);
+  }
+
+  function fillMath(o) {
     const math = document.getElementById("math");
-    (o.katex || []).forEach((tex) => math.appendChild(katexEl(tex, true)));
-    const fillList = (id, arr) => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = (arr || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    if (!math) return;
+    const texs = o.katex || [];
+    const sig = texs.join("\n");
+    if (math.dataset.sig === sig && math.childElementCount) {
+      decorateFormulas(math);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    texs.forEach((tex) => {
+      const fig = document.createElement("figure");
+      fig.className = "formula";
+      fig._tex = tex;
+      const scroll = document.createElement("div");
+      scroll.className = "formula-scroll";
+      const box = katexEl(tex, true);
+      box.classList.add("katex-block");
+      scroll.appendChild(box);
+      fig.appendChild(scroll);
+      const tools = document.createElement("div");
+      tools.className = "formula-tools";
+      const b1 = document.createElement("button");
+      b1.type = "button";
+      b1.className = "fcopy";
+      b1.textContent = "复制 LaTeX";
+      const b2 = document.createElement("button");
+      b2.type = "button";
+      b2.className = "fshare";
+      b2.textContent = "复制锚点";
+      tools.appendChild(b1);
+      tools.appendChild(b2);
+      fig.appendChild(tools);
+      frag.appendChild(fig);
+    });
+    math.replaceChildren(frag);
+    math.dataset.sig = sig;
+    decorateFormulas(math);
+  }
+
+  function bindOpPage() {
+    const page = document.getElementById("op-page");
+    if (!page || page.dataset.bound) return;
+    page.dataset.bound = "1";
+    const syncPlay = () => {
+      const playBtn = document.getElementById("play");
+      if (playBtn && anim) playBtn.textContent = anim.isPlaying() ? "暂停" : "播放";
     };
+    page.addEventListener("click", (e) => {
+      const t = (e.target && e.target.closest) ? e.target : (e.target && e.target.parentElement);
+      if (!t || !t.closest) return;
+      if (t.closest("#play")) {
+        if (!anim) return;
+        if (anim.isPlaying()) anim.pause(); else anim.play();
+        syncPlay();
+        return;
+      }
+      if (t.closest("#step")) { if (anim) { anim.step(); syncPlay(); } return; }
+      if (t.closest("#stepPhase")) { if (anim) { anim.nextPhase(); syncPlay(); } return; }
+      if (t.closest("#reset")) { if (anim) { anim.reset(); syncPlay(); } return; }
+      if (t.closest("#copy-link")) {
+        copyText(pageUrl(currentOpId, pinnedSym || ""));
+        return;
+      }
+      const fcopy = t.closest(".fcopy");
+      if (fcopy) {
+        const fig = fcopy.closest(".formula");
+        copyText((fig && fig._tex) || "");
+        return;
+      }
+      const fshare = t.closest(".fshare");
+      if (fshare) {
+        copyText(pageUrl(currentOpId, pinnedSym || ""));
+        return;
+      }
+      const chip = t.closest(".sym-chip");
+      if (chip) {
+        const id = chip.dataset.sym;
+        if (pinnedSym === id) applyHover(null, true);
+        else applyHover(id, true);
+        return;
+      }
+    });
+    page.addEventListener("pointerover", (e) => {
+      const el = e.target.closest(".sym-hit");
+      if (!el || !page.contains(el)) return;
+      applyHover(el.dataset.sym, false);
+    });
+    page.addEventListener("pointerout", (e) => {
+      const el = e.target.closest(".sym-hit");
+      if (!el) return;
+      const rel = e.relatedTarget;
+      if (rel && el.contains(rel)) return;
+      applyHover(pinnedSym, false);
+    });
+    page.addEventListener("focusin", (e) => {
+      const el = e.target.closest(".sym-hit");
+      if (el) applyHover(el.dataset.sym, false);
+    });
+    page.addEventListener("focusout", (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains("sym-hit")) {
+        applyHover(pinnedSym, false);
+      }
+    });
+    const timelineEl = document.getElementById("timeline");
+    if (timelineEl) {
+      timelineEl.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-phase]");
+        if (!b || !anim) return;
+        anim.setPhase(+b.dataset.phase);
+        syncPlay();
+      });
+    }
+    const sl = document.getElementById("sliders");
+    if (sl) {
+      sl.addEventListener("input", (e) => {
+        const inp = e.target.closest("input");
+        if (!inp || !anim) return;
+        const v = parseFloat(inp.value);
+        const sv = inp.parentElement.querySelector(".sv");
+        if (sv) sv.textContent = String(Math.round(v * 1000) / 1000);
+        anim.setParam(inp.dataset.k, v);
+      });
+    }
+  }
+
+  function mountDemo(o) {
+    const sl = document.getElementById("sliders");
+    if (sl) {
+      sl.replaceChildren();
+      const mk = (key, label, min, max, val, step) => {
+        const title = SLIDER_TITLE[key] || label;
+        const hint = SLIDER_HINT[key] || ("调节「" + title + "」：观察画面与右侧指标如何一起变");
+        const lab = document.createElement("label");
+        lab.className = "slider-row";
+        lab.innerHTML = `<span class="sl-name">${esc(title)}</span>
+          <input type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-k="${key}">
+          <span class="sv">${val}</span>
+          <span class="sl-hint">${esc(hint)}</span>`;
+        sl.appendChild(lab);
+      };
+      mk("speed", "播放速度", 0.25, 2.5, 1, 0.05);
+      (o.sliders || []).forEach((s) => mk(s.key, s.label, s.min, s.max, s.value, ((s.max - s.min) / 80)));
+    }
+    const timelineEl = document.getElementById("timeline");
+    if (timelineEl) {
+      timelineEl.innerHTML = "";
+      delete timelineEl.dataset.ready;
+    }
+    const wrap = document.getElementById("demo-wrap");
+    if (wrap) wrap.classList.remove("is-hover");
+    const canvas = document.getElementById("demo");
+    anim = window.AnimEngine.mount(canvas, {
+      operator: o,
+      captionEl: document.getElementById("cap"),
+      metricsEl: document.getElementById("met"),
+      stepsEl: document.getElementById("steplist"),
+      timelineEl,
+    });
+    const playBtn = document.getElementById("play");
+    if (playBtn) playBtn.textContent = anim.isPlaying() ? "暂停" : "播放";
+  }
+
+  function patchOp(o, hl) {
+    const color = (CH[o.ch] || {}).color || "#5b8cff";
+    const same = chapterSiblings(o);
+    const idx = same.findIndex((x) => x.id === o.id);
+    const prev = same[idx - 1];
+    const next = same[idx + 1];
+    const symbol = SYMBOL_MAP[o.demo] || "对照画布：蓝=状态/密度，橙=控制/速度场，紫=协态，绿=能量/熵/代价，灰虚线=基准。";
+    const hover = (window.OPHover && window.OPHover.resolve) ? window.OPHover.resolve(o) : { symbols: [] };
+    currentSymbols = hover.symbols || [];
+    pinnedSym = hl && currentSymbols.some((s) => s.id === hl) ? hl : null;
+
+    const crumb = document.getElementById("crumb");
+    if (crumb) crumb.innerHTML = `<a href="#/">谱系</a><span>/</span><span>${esc(o.chapter_title)}</span><span>/</span><strong>${esc(o.name)}</strong>`;
+    const chList = document.getElementById("ch-toc-list");
+    if (chList) {
+      chList.innerHTML = same.map((x) =>
+        `<a href="#/op/${x.id}" class="${x.id === o.id ? "on" : ""}">${esc(x.name)}</a>`
+      ).join("");
+    }
+    const lineage = document.getElementById("lineage");
+    if (lineage) lineage.innerHTML = lineageHtml(o);
+    const tags = document.getElementById("tags");
+    if (tags) tags.innerHTML = `
+      <span class="tag" style="border-color:${color};color:${color}">${esc(o.chapter)}</span>
+      <span class="tag">${esc(o.tag)}</span>
+      <span class="tag">${esc(o.section)}</span>
+      <span class="tag">层级 ${o.level}</span>`;
+    setText("op-title", o.name);
+    const en = document.getElementById("op-en");
+    if (en) en.innerHTML = `${esc(o.name_en)} · <code>${esc(o.id)}</code>`;
+    const warn = document.getElementById("warn");
+    if (warn) {
+      if (o.flag || o.note) {
+        warn.hidden = false;
+        warn.innerHTML = o.flag ? `<b>${esc(o.flag)}</b><div>${esc(o.note || "")}</div>` : esc(o.note);
+      } else {
+        warn.hidden = true;
+        warn.textContent = "";
+      }
+    }
+    setText("intuit", o.intuition);
+    const problem = document.getElementById("problem");
+    if (problem) problem.textContent = "它要解决的问题：" + (o.problem || "");
+    setText("symbol-map", symbol);
+    const chips = document.getElementById("sym-chips");
+    if (chips) {
+      chips.innerHTML = currentSymbols.map((s) =>
+        `<button type="button" class="sym-chip" data-sym="${esc(s.id)}" title="点击钉住高亮">${esc(s.label)}</button>`
+      ).join("");
+    }
+    fillMath(o);
+    const io = document.getElementById("io");
+    if (io) io.textContent = "输入 / 输出：" + (o.io || "");
+    const preview = document.getElementById("step-preview");
+    if (preview) preview.innerHTML = (o.steps || []).map((s, i) => `<li>节拍 ${i + 1}：${esc(s)}</li>`).join("");
+    const definition = document.getElementById("definition");
+    if (definition) definition.textContent = "论文原文定义式：" + (o.definition || "");
+    setText("pseudo", o.pseudo);
     fillList("apps", o.apps);
     fillList("pros", o.pros);
     fillList("cons", o.cons);
-    document.getElementById("up").innerHTML = (o.upstream || []).map(linkOp).join("") || "<span class='muted'>（根节点）</span>";
-    document.getElementById("dn").innerHTML = (o.downstream || []).map(linkOp).join("") || "<span class='muted'>（叶节点）</span>";
-    if (o.also_in && o.also_in.length && document.getElementById("also")) {
-      document.getElementById("also").innerHTML = o.also_in.map((a) =>
-        `<div class="muted">· ${esc(a["来源章"] || "")} · ${esc(a["章节公式"] || a["章节+公式号"] || "")}<br>${esc(a["定义式"] || "")}</div>`
-      ).join("");
+    const source = document.getElementById("source");
+    if (source) source.innerHTML = `原始出处：${esc(o.source)}<br>原文摘录：「${esc(o.excerpt)}」`;
+    const up = document.getElementById("up");
+    if (up) up.innerHTML = (o.upstream || []).map(linkOp).join("") || "<span class='muted'>（根节点）</span>";
+    const dn = document.getElementById("dn");
+    if (dn) dn.innerHTML = (o.downstream || []).map(linkOp).join("") || "<span class='muted'>（叶节点）</span>";
+    const alsoWrap = document.getElementById("also-wrap");
+    const also = document.getElementById("also");
+    if (alsoWrap && also) {
+      if (o.also_in && o.also_in.length) {
+        alsoWrap.hidden = false;
+        also.innerHTML = o.also_in.map((a) =>
+          `<div class="muted">· ${esc(a["来源章"] || "")} · ${esc(a["章节公式"] || a["章节+公式号"] || "")}<br>${esc(a["定义式"] || "")}</div>`
+        ).join("");
+      } else {
+        alsoWrap.hidden = true;
+        also.textContent = "";
+      }
     }
     const refsEl = document.getElementById("refs");
     if (refsEl) {
@@ -494,73 +903,68 @@
           — ${esc(r.authors)} (${r.year}). ${esc(r.venue)}</li>`;
       }).join("");
     }
+    const nav = document.getElementById("nav-ops");
+    if (nav) {
+      nav.innerHTML = (prev ? `<a class="lk" href="#/op/${prev.id}">← ${esc(prev.name)}</a>` : "<span class='muted'>同章已到开头</span>")
+        + (next ? `<a class="lk" href="#/op/${next.id}">${esc(next.name)} →</a>` : "<span class='muted'>同章已到末尾</span>");
+    }
+    setText("demo-name", o.name);
+    setText("demo-en", o.name_en);
+    const steplist = document.getElementById("steplist");
+    if (steplist) steplist.innerHTML = (o.steps || []).map((s) => `<li>${esc(s)}</li>`).join("");
+  }
 
-    const sl = document.getElementById("sliders");
-    const mk = (key, label, min, max, val, step) => {
-      const title = SLIDER_TITLE[key] || label;
-      const hint = SLIDER_HINT[key] || ("调节「" + title + "」：观察画面与右侧指标如何一起变");
-      const lab = document.createElement("label");
-      lab.className = "slider-row";
-      lab.innerHTML = `<span class="sl-name">${esc(title)}</span>
-        <input type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-k="${key}">
-        <span class="sv">${val}</span>
-        <span class="sl-hint">${esc(hint)}</span>`;
-      sl.appendChild(lab);
-    };
-    mk("speed", "播放速度", 0.25, 2.5, 1, 0.05);
-    (o.sliders || []).forEach((s) => mk(s.key, s.label, s.min, s.max, s.value, ((s.max - s.min) / 80)));
-
-    const canvas = document.getElementById("demo");
-    const timelineEl = document.getElementById("timeline");
-    anim = window.AnimEngine.mount(canvas, {
-      operator: o,
-      captionEl: document.getElementById("cap"),
-      metricsEl: document.getElementById("met"),
-      stepsEl: document.getElementById("steplist"),
-      timelineEl,
-    });
-    const playBtn = document.getElementById("play");
-    const syncPlay = () => { playBtn.textContent = anim.isPlaying() ? "暂停" : "播放"; };
-    playBtn.addEventListener("click", () => {
-      if (anim.isPlaying()) anim.pause();
-      else anim.play();
-      syncPlay();
-    });
-    document.getElementById("step").addEventListener("click", () => { anim.step(); syncPlay(); });
-    document.getElementById("stepPhase").addEventListener("click", () => { anim.nextPhase(); syncPlay(); });
-    document.getElementById("reset").addEventListener("click", () => { anim.reset(); syncPlay(); });
-    timelineEl.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-phase]");
-      if (!b) return;
-      anim.setPhase(+b.dataset.phase);
-      syncPlay();
-    });
-    sl.addEventListener("input", (e) => {
-      const inp = e.target.closest("input");
-      if (!inp) return;
-      const v = parseFloat(inp.value);
-      inp.parentElement.querySelector(".sv").textContent = String(Math.round(v * 1000) / 1000);
-      anim.setParam(inp.dataset.k, v);
-    });
+  function renderOp(id, hl) {
+    const o = BY[id];
+    if (!o) {
+      destroyAnim();
+      currentOpId = null;
+      document.body.classList.remove("page-op");
+      view.innerHTML = `<div class="card"><p>找不到算子 ${esc(id)}</p><a href="#/">返回</a></div>`;
+      return;
+    }
+    rememberOp(id);
+    document.body.classList.add("page-op");
+    const keep = !!view.querySelector("#op-page");
+    const strictOpen = keep && document.getElementById("layer-strict") && document.getElementById("layer-strict").open;
+    if (keep) {
+      destroyAnimOnly();
+    } else {
+      destroyAnim();
+      view.innerHTML = opShellHtml();
+      bindOpPage();
+    }
+    currentOpId = id;
+    patchOp(o, hl);
+    if (strictOpen) {
+      const d = document.getElementById("layer-strict");
+      if (d) d.open = true;
+    }
+    mountDemo(o);
+    syncToc(id);
+    applyHover(pinnedSym, false);
   }
 
   function route() {
-    const h = location.hash || "#/";
-    const m = h.match(/^#\/op\/([^/?#]+)/);
-    if (m) renderOp(decodeURIComponent(m[1]));
+    const r = parseRoute();
+    if (r.kind === "op") renderOp(r.id, r.hl);
     else renderHome();
   }
   window.addEventListener("hashchange", route);
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      setTocOpen(false);
+      return;
+    }
     if (e.key === "/" && !(e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA"))) {
       e.preventDefault();
       q.focus();
       return;
     }
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-    const m = (location.hash || "").match(/^#\/op\/([^/?#]+)/);
-    if (!m) return;
-    const cur = BY[decodeURIComponent(m[1])];
+    const r = parseRoute();
+    if (r.kind !== "op") return;
+    const cur = BY[r.id];
     if (!cur) return;
     const same = chapterSiblings(cur);
     const idx = same.findIndex((x) => x.id === cur.id);
@@ -573,6 +977,7 @@
       location.hash = "#/op/" + same[idx + 1].id;
     }
     if (e.key === " " && anim) {
+      if (e.target && e.target.closest && e.target.closest("button, a, summary, [contenteditable]")) return;
       e.preventDefault();
       const playBtn = document.getElementById("play");
       if (!playBtn) return;

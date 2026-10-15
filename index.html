@@ -21,8 +21,19 @@
       <div id="res" class="search-res" hidden></div>
     </div>
     <div class="chips" id="chips"></div>
+    <button class="icon-btn" id="toc-toggle" type="button" title="章节大纲" aria-label="章节大纲" aria-controls="toc-panel" aria-expanded="false">☰</button>
     <button class="icon-btn" id="theme" type="button" title="切换深浅色" aria-label="切换深浅色">◐</button>
   </header>
+
+  <div id="toc-backdrop" class="toc-backdrop" hidden></div>
+  <aside id="toc-panel" class="toc-panel" hidden>
+    <div class="toc-head">
+      <strong>章节大纲</strong>
+      <button type="button" class="icon-btn toc-close" id="toc-close" title="关闭大纲" aria-label="关闭大纲">×</button>
+    </div>
+    <p class="toc-hint muted">点算子进入讲解；当前章会自动展开。</p>
+    <div class="toc-body" id="toc-body"></div>
+  </aside>
 
   <main id="view"></main>
   <div id="toast" hidden></div>
@@ -42,6 +53,7 @@
   <script src="js/anim/ch7.js"></script>
   <script src="js/animations.js"></script>
   <script src="js/graph.js"></script>
+  <script src="js/hover-map.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
