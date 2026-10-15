@@ -61,6 +61,102 @@
     };
   }
 
+  function markHit(S, key, spec) {
+    if (!S || !key || !spec) return;
+    if (!S.hitRegions) S.hitRegions = {};
+    (S.hitRegions[key] || (S.hitRegions[key] = [])).push(spec);
+  }
+  global.OP_MARK_HIT = markHit;
+
+  function rrPath(ctx, x, y, w, h, r) {
+    r = Math.min(r || 8, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function glowRegion(ctx, r, col, pulse) {
+    let x, y, w, h;
+    if (r.type === "box" && r.box) {
+      x = r.box.x0; y = r.box.y0; w = r.box.w; h = r.box.h;
+    } else if (r.type === "rect" || r.w != null) {
+      x = r.x; y = r.y; w = r.w; h = r.h;
+    } else if (r.type === "circle") {
+      ctx.save();
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 10 + 22 * pulse;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 + 2.4 * pulse;
+      ctx.globalAlpha = 0.4 + 0.5 * pulse;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, (r.r || 10) + 5 * pulse, 0, TWO);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    } else {
+      return;
+    }
+    ctx.save();
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 12 + 20 * pulse;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2.2 + 2.6 * pulse;
+    ctx.globalAlpha = 0.38 + 0.5 * pulse;
+    rrPath(ctx, x, y, w, h, 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.07 + 0.1 * pulse;
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function paintHover(ctx, S, T) {
+    const h = S.hover;
+    if (!h) return;
+    const pulse = 0.5 + 0.5 * Math.sin((performance.now ? performance.now() : S.t * 1000) / 220);
+    const colorOf = { state: T.state, ctrl: T.ctrl, adj: T.adj, energy: T.energy };
+    const keys = h.targets || [];
+    ctx.save();
+    let painted = false;
+    keys.forEach((k) => {
+      const col = colorOf[k] || T.c2;
+      const regions = (S.hitRegions && S.hitRegions[k]) || [];
+      regions.forEach((r) => {
+        painted = true;
+        glowRegion(ctx, r, col, pulse);
+      });
+    });
+    const col = colorOf[keys[0]] || T.c5;
+    if (!painted) {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.28 + 0.42 * pulse;
+      ctx.lineWidth = 2.4 + 2.4 * pulse;
+      rrPath(ctx, 6, 6, S.W - 12, S.H - CHROME_H - 12, 12);
+      ctx.stroke();
+    }
+    const label = h.label || (keys.join(" / ") || "高亮");
+    ctx.globalAlpha = 0.94;
+    ctx.font = "12px " + FONT_STACK;
+    const tw = Math.min(S.W - 24, ctx.measureText("聚焦 · " + label).width + 16);
+    const bx = 10, by = 8;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.88)" : "rgba(255,255,255,0.9)";
+    rrPath(ctx, bx, by, tw, 22, 6);
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("聚焦 · " + label, bx + 8, by + 11);
+    ctx.restore();
+  }
+
   function mount(canvas, opts) {
     const captionEl = opts.captionEl;
     const metricsEl = opts.metricsEl;
@@ -213,6 +309,7 @@
     }
     function draw() {
       const T = theme();
+      S.hitRegions = {};
       ctx.save();
       ctx.font = "12px " + FONT_STACK;
       ctx.fillStyle = T.dark ? "#070d18" : "#eef2fb";
@@ -222,6 +319,7 @@
         ctx.font = "13px " + FONT_STACK;
         ctx.fillText("动画错误: " + e.message, 16, 28);
       }
+      paintHover(ctx, S, T);
       drawChrome(ctx, S, T);
       ctx.restore();
       if (captionEl) captionEl.textContent = (S.phase + 1) + "/" + S.steps.length + "  " + (S.steps[S.phase] || "");
@@ -300,6 +398,12 @@
         draw();
       },
       isPlaying() { return S.playing; },
+      setHover(spec) {
+        if (dead) return;
+        S.hover = spec || null;
+        const wrap = canvas.parentElement;
+        if (wrap) wrap.classList.toggle("is-hover", !!spec);
+      },
       destroy() {
         dead = true;
         cancelAnimationFrame(raf);
@@ -457,6 +561,8 @@
         ctx.fillStyle = T.c6;
         ctx.beginPath(); ctx.arc(X(S.sim.th), Y(S.sim.elbo), 6, 0, TWO); ctx.fill();
         label(ctx, "蓝: log p(x)   绿: ELBO   间隙=KL", 50, 18, T);
+        markHit(S, "energy", { type: "rect", x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+        markHit(S, "state", { type: "rect", x: x0, y: y0, w: x1 - x0, h: (y1 - y0) * 0.55 });
       },
     });
 
@@ -874,6 +980,8 @@
           arrow(ctx, cx + p.x * sc, cy + p.y * sc, -Math.tanh(p0.x) * 16, -0.28 * Math.tanh(p0.y) * 16, T.ctrl);
         });
         label(ctx, "体积被压 → 1/|det ∇T| 升高（格子加深）", 28, 22, T);
+        markHit(S, "state", { type: "rect", x: 24, y: 32, w: S.W - 48, h: S.H - 70 });
+        markHit(S, "ctrl", { type: "rect", x: cx - 90, y: cy - 70, w: 180, h: 140 });
       },
     });
 
@@ -919,6 +1027,8 @@
         for (let j = 2; j < ny - 1; j += 2) arrow(ctx, 30, 40 + j * ch, 26, 0, T.ctrl);
         const ok = Math.abs(S.metrics["相对漂移"] || 0) < 0.08;
         label(ctx, "周期边界 + 守恒通量   ∑Q=" + (S.metrics["∑Q"] || 0).toFixed(3) + (ok ? " 守恒" : ""), 24, 22, T);
+        markHit(S, "state", { type: "rect", x: 20, y: 36, w: S.W - 40, h: S.H - 56 });
+        markHit(S, "ctrl", { type: "rect", x: 20, y: 40, w: 70, h: S.H - 80 });
       },
     });
 
@@ -1117,6 +1227,11 @@
           }
         }
         label(ctx, inf ? "无穷时域：协态沿包络衰减，终端横截变成 λ(∞)=0" : "蓝 z · 紫 λ(T)=∇ψ 终端横截 · 橙 u", 24, 22, T);
+        if (S.sim.z.length) {
+          markHit(S, "state", { type: "rect", x: 32, y: S.H * 0.38, w: S.W - 90, h: S.H * 0.4 });
+          markHit(S, "adj", { type: "rect", x: 32, y: 24, w: S.W - 90, h: S.H * 0.28 });
+          markHit(S, "ctrl", { type: "rect", x: S.W - 160, y: 60, w: 140, h: 110 });
+        }
       },
     });
 
