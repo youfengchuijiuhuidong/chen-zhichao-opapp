@@ -1638,50 +1638,131 @@
   R("wasserstein_space_p2", {
     init(S) {
       const rnd = mulberry(4);
-      S.sim = { z: [], w: [] };
-      for (let i = 0; i < 36; i++) { S.sim.z.push({ x: nrm(rnd) * 0.6, y: nrm(rnd) * 0.5 }); S.sim.w.push(1 / 36); }
+      S.sim = { z: [], w: [], traj: [] };
+      for (let i = 0; i < 42; i++) {
+        S.sim.z.push({ x: nrm(rnd) * 0.52, y: nrm(rnd) * 0.44 });
+        S.sim.w.push(1 / 42);
+      }
     },
     tick(S, dt) {
+      const spread = sl(S, "spread", 1);
       const sep = sl(S, "sep", 1);
       const ph = S.phase;
-      S.sim.z.forEach((p, i) => {
-        const ang = S.t * 0.3 + i;
-        if (ph >= 3) {
-          p.x += dt * 0.6 * sep * Math.cos(ang * 0.2);
-          p.y += dt * 0.35 * sep * Math.sin(ang * 0.2);
-        }
-      });
+
       let m2 = 0, sw = 0;
-      S.sim.z.forEach((p, i) => { sw += S.sim.w[i]; m2 += S.sim.w[i] * (p.x * p.x + p.y * p.y); });
+      const t = S.t;
+      S.sim.z.forEach((p, i) => {
+        const baseAng = (i / 42) * Math.PI * 2;
+        const driftX = (sep - 1) * 0.55 + 0.12 * Math.sin(t * 0.8 + baseAng);
+        const driftY = 0.10 * Math.cos(t * 0.6 + baseAng);
+        p.curX = p.x * spread + driftX;
+        p.curY = p.y * spread + driftY;
+        sw += S.sim.w[i];
+        m2 += S.sim.w[i] * (p.curX * p.curX + p.curY * p.curY);
+      });
+
+      const ptX = (sep - 1) * 0.85;
+      const ptY = (spread - 1) * 0.75;
+      if (!S.sim.traj) S.sim.traj = [];
+      S.sim.traj.push({ x: ptX, y: ptY, m2 });
+      while (S.sim.traj.length > 50) S.sim.traj.shift();
+
       S.metrics["∑w"] = sw;
       S.metrics["E‖z‖²"] = m2;
-      S.metrics["∈P2"] = (Math.abs(sw - 1) < 1e-3 && m2 < 20) ? 1 : 0;
+      const bounded = m2 < 4.2;
+      S.metrics["∈P2"] = (Math.abs(sw - 1) < 1e-3 && bounded) ? 1 : 0;
     },
     draw(ctx, S, T) {
       banner(ctx, S, T);
-      const cx = S.W * 0.42, cy = S.H * 0.55, sc = Math.min(S.W, S.H) * 0.22;
+      const midX = S.W * 0.5;
+      const H = S.H;
+
+      // 分隔中线与背景分区
       ctx.strokeStyle = T.line;
-      ctx.beginPath(); ctx.moveTo(cx - 140, cy); ctx.lineTo(cx + 140, cy); ctx.moveTo(cx, cy - 100); ctx.lineTo(cx, cy + 100); ctx.stroke();
-      const sep = sl(S, "sep", 1);
-      S.sim.z.forEach((p) => glow(ctx, cx + p.x * sc * sep, cy - p.y * sc * sep, 4, T.c2));
-      S.metrics["搬迁"] = sep;
-      /* 规范仪表 */
-      const gx = S.W - 150, gy = 48;
-      const ok1 = Math.abs(S.metrics["∑w"] - 1) < 1e-3;
-      const ok2 = S.metrics["E‖z‖²"] < 8;
-      ctx.fillStyle = T.mu; ctx.font = "11px sans-serif"; ctx.textAlign = "left";
-      ctx.fillText("P2 入场券", gx, gy);
-      ctx.fillStyle = ok1 && (S.phase !== 0) ? T.c4 : T.c6;
-      rr(ctx, gx, gy + 10, 120, 22, 5); ctx.fill();
-      ctx.fillStyle = "#071018"; ctx.fillText("∑w = " + S.metrics["∑w"].toFixed(3), gx + 8, gy + 24);
-      ctx.fillStyle = (ok2 && S.phase !== 0) ? T.c4 : (S.phase === 2 ? T.c5 : T.mu);
-      rr(ctx, gx, gy + 40, 120, 22, 5); ctx.fill();
-      ctx.fillStyle = "#071018"; ctx.fillText("E‖z‖²=" + S.metrics["E‖z‖²"].toFixed(2), gx + 8, gy + 54);
-      if (S.phase === 0) callout(ctx, 40, 54, "粒子云 = 分布 Q", T, T.c2);
-      if (S.phase === 1) callout(ctx, gx - 20, gy + 80, "权重必须和为 1", T, T.c4);
-      if (S.phase === 2) callout(ctx, gx - 20, gy + 80, "二阶矩有限（别飞太远）", T, T.c5);
-      if (S.phase === 3) callout(ctx, 40, 54, "Q 在 P2 里移动 = 整朵云搬迁", T, T.c3);
-    },
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(midX, 42);
+      ctx.lineTo(midX, H - 24);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 左视窗：微观状态空间 R^d
+      ctx.fillStyle = T.mu;
+      ctx.font = "bold 12px " + FONT;
+      ctx.textAlign = "center";
+      ctx.fillText("【微观视窗】状态空间 R^d · 粒子云 Q(z)", midX * 0.5, 54);
+
+      const cx1 = midX * 0.5, cy1 = H * 0.55, sc1 = Math.min(midX, H) * 0.32;
+      ctx.strokeStyle = T.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.moveTo(cx1 - 90, cy1); ctx.lineTo(cx1 + 90, cy1);
+      ctx.moveTo(cx1, cy1 - 65); ctx.lineTo(cx1, cy1 + 65);
+      ctx.stroke();
+
+      const isOk = S.metrics["∈P2"] === 1;
+      const col = isOk ? T.c2 : T.c6;
+      S.sim.z.forEach((p) => {
+        glow(ctx, cx1 + p.curX * sc1, cy1 - p.curY * sc1, 4, col);
+      });
+
+      // 右视窗：宏观奥托流形 P2
+      ctx.fillStyle = T.mu;
+      ctx.fillText("【宏观视窗】沃瑟斯坦流形 P2 (Otto Calculus)", midX + midX * 0.5, 54);
+
+      const cx2 = midX + midX * 0.5, cy2 = H * 0.56;
+      ctx.strokeStyle = T.dark ? "rgba(91,140,255,0.22)" : "rgba(91,140,255,0.3)";
+      for (let u = -3; u <= 3; u++) {
+        ctx.beginPath();
+        for (let v = -28; v <= 28; v += 4) {
+          const rx = v * 3.4;
+          const ry = u * 18 + 0.009 * (rx * rx);
+          if (v === -28) ctx.moveTo(cx2 + rx, cy2 + ry);
+          else ctx.lineTo(cx2 + rx, cy2 + ry);
+        }
+        ctx.stroke();
+      }
+
+      // 流形质点与切空间切线
+      const lastPt = (S.sim.traj && S.sim.traj[S.sim.traj.length - 1]) || { x: 0, y: 0 };
+      const dotX = cx2 + lastPt.x * 55;
+      const dotY = cy2 + lastPt.y * 32 + 0.009 * Math.pow(lastPt.x * 55, 2);
+
+      // 切空间切线平面
+      ctx.strokeStyle = T.c5;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(dotX - 35, dotY + 10);
+      ctx.lineTo(dotX + 35, dotY - 10);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.fillStyle = T.c5;
+      ctx.font = "10px " + FONT;
+      ctx.fillText("切空间 T_Q P2", dotX + 48, dotY - 12);
+
+      // 流形质点高亮发光
+      glow(ctx, dotX, dotY, 7, isOk ? T.c3 : T.c6);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = T.tx;
+      ctx.fillText("整团分布 Q 在流形上是一点", dotX, dotY + 22);
+
+      // 二阶矩状态面板
+      const gx = S.W - 138, gy = 66;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 132, 54, 6); ctx.fill();
+      ctx.strokeStyle = isOk ? T.c4 : T.c6; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("二阶矩入场券检验", gx, gy + 11);
+      ctx.fillStyle = isOk ? T.c4 : T.c6;
+      ctx.fillText("E[‖z‖²] = " + S.metrics["E‖z‖²"].toFixed(2), gx, gy + 27);
+      ctx.fillText(isOk ? "✓ 处于 P2 流形内" : "⚠ 二阶矩发散(移出)", gx, gy + 42);
+
+      if (S.phase === 0) callout(ctx, 24, 76, "微观粒子云 = 一个分布 Q", T, T.c2);
+      if (S.phase === 1) callout(ctx, midX + 16, 76, "整团分布在 P2 上只是一点", T, T.c3);
+      if (S.phase === 2) callout(ctx, 24, 76, "二阶矩有限：赋流形度量的入场券", T, isOk ? T.c4 : T.c6);
+      if (S.phase === 3) callout(ctx, midX + 16, 76, "切向量对应连续性方程速度场 φ", T, T.c5);
+    }
   });
 
   R("normalization_constraint", {

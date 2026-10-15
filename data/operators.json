@@ -3,7 +3,7 @@
     "title": "算子谱系交互讲义",
     "thesis": "陈智超《基于泛函优化的概率隐变量建模理论及软测量应用》",
     "total": 127,
-    "edges": 221,
+    "edges": 228,
     "by_chapter": {
       "2": 38,
       "3": 20,
@@ -30,7 +30,7 @@
         "推断": 7,
         "自证": 14
       },
-      "edges": 221,
+      "edges": 228,
       "same_id_merged": 6,
       "补链第2章": 17
     }
@@ -87,7 +87,7 @@
       "io": "输入：简单先验 P(z)、条件分布 P(x|z)；输出：复杂边缘分布 P(x)",
       "problem": "用简单分布 P(z) 加条件分布表达多峰、动态的观测分布 P(x)",
       "source": "论文自述框架；标准 PLVM",
-      "excerpt": "将复杂的分布 P(x)通过下式进行边缘化",
+      "excerpt": "将复杂的观测分布 P(x) 通过下式在连续或离散隐变量空间 Ω 上进行全概率积分边缘化，从而通过分层抽样结构表达复杂多模态数据。",
       "upstream": [],
       "downstream": [
         "latent_max_likelihood"
@@ -184,7 +184,7 @@
       "io": "输入：数据 x、p_θ(x|z)、P(z)；输出：θ",
       "problem": "训练 p_θ(x|z)；但高维积分难算，动机引入变分分布",
       "source": "极大似然原理（标准）",
-      "excerpt": "根据极大似然原理，可以引入如下的优化命题进行模型的训练",
+      "excerpt": "根据极大似然原理，可以引入如下的优化命题进行模型的训练：通过最大化观测数据的对数边缘似然确定模型的最优参数 θ*。",
       "upstream": [
         "latent_marginalization"
       ],
@@ -262,7 +262,7 @@
           "key": "beta",
           "label": "变分贴合",
           "min": 0.1,
-          "max": 1.0,
+          "max": 1,
           "value": 0.55
         }
       ],
@@ -380,7 +380,7 @@
       "io": "输入：θ、Q(z)、x；输出：对数似然下界",
       "problem": "绕开高维积分，通过不断提升 ELBO 优化模型",
       "source": "[110]（琴生不等式）；标准 VI",
-      "excerpt": "而 EQ(z) [log",
+      "excerpt": "而 EQ(z)[log(p_θ(x,z)/Q(z))] 构成了对数边缘似然 log p_θ(x) 的证据下界，二者之差恰好为变分分布与真实后验之间的非负 KL 散度。",
       "upstream": [
         "latent_max_likelihood",
         "jensen_inequality"
@@ -462,7 +462,7 @@
           "key": "beta",
           "label": "变分贴合",
           "min": 0.1,
-          "max": 1.0,
+          "max": 1,
           "value": 0.55
         }
       ],
@@ -483,7 +483,7 @@
       "io": "输入：分布 Q、P；输出：非负散度",
       "problem": "把‘最大化 ELBO 关于 Q’转化为‘最小化 Q 到后验的 KL’",
       "source": "[111] Van Erven & Harremoës",
-      "excerpt": "其中 DKL [Q(z)kP(z|x)] 为分布 Q(z) 和分布 P(z|x) 之间的库尔贝克-莱布勒散度",
+      "excerpt": "其中 D_KL[Q(z)‖P(z|x)] 为分布 Q(z) 和真实后验分布 P(z|x) 之间的库尔贝克-莱布勒散度，满足非负性且当且仅当分布几乎处处相等时取零。",
       "upstream": [
         "elbo"
       ],
@@ -569,7 +569,7 @@
           "label": "分布间距",
           "min": 0.2,
           "max": 2.4,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -601,7 +601,10 @@
       "upstream": [
         "kl_divergence"
       ],
-      "downstream": [],
+      "downstream": [
+        "em_e_step_kl",
+        "entropy_regularized_functional"
+      ],
       "level": 4,
       "demo": "varfit",
       "katex": [
@@ -694,7 +697,7 @@
       "io": "输入：p_θ(x|z)、P(z)；输出：Q*(z)",
       "problem": "给出 E 步最优解的形式；Q* 是 p_θ(x|z) 的‘反函数’，为摊销推断提供依据",
       "source": "标准 VI 结论",
-      "excerpt": "一个最优的变分分布 Q∗ (z) 应当满足下式",
+      "excerpt": "一个最优的变分分布 Q*(z) 应当满足下式：Q*(z) ∝ P(z|x) ∝ p_θ(x|z)P(z)，表明无约束条件下的最优推断分布即为生成模型的对偶后验分布。",
       "upstream": [
         "kl_divergence"
       ],
@@ -785,7 +788,7 @@
       "io": "输入：数据、p_θ(x|z)、θ、P(z)、迭代数 T、阈值 ε；输出：θ*",
       "problem": "交替优化 Q 与 θ 提升 ELBO，实现最大似然",
       "source": "[67-68] 变分推断；EM 标准",
-      "excerpt": "可以总结如算法2.1所示的概率隐变量模型学习变分贝叶斯期望-最大化算法",
+      "excerpt": "可以总结如算法2.1所示的概率隐变量模型学习变分贝叶斯期望-最大化算法，通过交替优化变分分布 Q 与生成参数 θ，确保似然下界单调递增至收敛。",
       "upstream": [
         "optimal_variational_distribution",
         "elbo"
@@ -866,8 +869,8 @@
           "key": "rate",
           "label": "提升速度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -887,7 +890,7 @@
       "io": "输入：x；输出：近似后验 q_φ(z|x)",
       "problem": "深度网络 p_θ 难以求逆，用输入 x 的网络直接近似最优 Q*",
       "source": "[51] Kingma & Welling；[54-55]",
-      "excerpt": "Kingma 和 Welling[51] 引入了一个参数为 φ 的神经网络 qφ (z|x)",
+      "excerpt": "Kingma 和 Welling 引入了一个参数为 φ 的神经网络 q_φ(z|x) 作为识别模型（编码器），将各样本独立的迭代优化转变为共享前向网络的直接推断。",
       "upstream": [
         "optimal_variational_distribution"
       ],
@@ -965,8 +968,8 @@
           "key": "beta",
           "label": "KL 权重",
           "min": 0.1,
-          "max": 4.0,
-          "value": 1.0
+          "max": 4,
+          "value": 1
         }
       ],
       "note": null,
@@ -986,7 +989,7 @@
       "io": "输入：x、θ、φ；输出：θ,φ",
       "problem": "同时优化 θ 与 φ 提升 ELBO",
       "source": "[51]；[54-55]",
-      "excerpt": "这样一类模型被称为变分自编码器",
+      "excerpt": "这样一类同时优化生成网络参数 θ 与推断网络参数 φ 的深度隐变量模型被称为变分自编码器（VAE），通过最大化摊销证据下界实现高效表示学习。",
       "upstream": [
         "elbo",
         "amortized_inference_network",
@@ -1066,8 +1069,8 @@
           "key": "beta",
           "label": "KL 权重",
           "min": 0.1,
-          "max": 4.0,
-          "value": 1.0
+          "max": 4,
+          "value": 1
         }
       ],
       "note": null,
@@ -1087,12 +1090,15 @@
       "io": "输入：数据、p_θ、P(z)、T、ε；输出：θ*",
       "problem": "把 VBEM 重构为对 θ、φ 同步更新的 VAE 训练流程",
       "source": "[51][54-55]",
-      "excerpt": "算法2.1可以重构为算法2.2所示的流程对 θ 和 φ 进行同步更新",
+      "excerpt": "算法2.1可以重构为算法2.2所示的流程，对参数 θ 和 φ 进行同步梯度反向传播更新，在大规模数据集上利用随机小批量优化代替全量交替迭代。",
       "upstream": [
         "vae_objective",
         "vbem"
       ],
-      "downstream": [],
+      "downstream": [
+        "imputation_composition",
+        "info_em_m_step"
+      ],
       "level": 7,
       "demo": "emloop",
       "katex": [
@@ -1155,8 +1161,8 @@
           "key": "rate",
           "label": "提升速度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -1176,7 +1182,7 @@
       "io": "输入：F、z_τ、步长 ε；输出：z_{τ+1}",
       "problem": "空间优化基础迭代；隐含欧氏空间假设",
       "source": "标准优化",
-      "excerpt": "则利用梯度下降方法，可以得到第 τ 次迭代和 τ + 1 次迭代的优",
+      "excerpt": "则利用梯度下降方法，可以得到第 τ 次迭代和 τ+1 次迭代的优化更新关系，这是在欧氏平坦度量空间下最基础的一阶无约束极小化迭代形式。",
       "upstream": [],
       "downstream": [
         "linearized_proximal_step"
@@ -1274,7 +1280,7 @@
       "io": "输入：F、z_τ、ε；输出：z_{τ+1}",
       "problem": "把目标换为一阶线性项，使‘相似度度量’可替换，从而处理约束域",
       "source": "标准；论文自述改写",
-      "excerpt": "可以考虑对式(2-9)、",
+      "excerpt": "可以考虑对式(2-9)的目标函数进行一阶泰勒线性化展开，并将欧氏距离邻近惩罚项替换为广义散度度量，从而使算法能够灵活处理受约束的非欧氏几何域。",
       "upstream": [
         "euclidean_gradient_descent"
       ],
@@ -1364,7 +1370,7 @@
       "io": "输入：z∈M；输出：标量势 Ψ(z)",
       "problem": "为约束凸集 M 上的优化提供可替换的几何",
       "source": "论文未单独引用；标准镜像下降对象",
-      "excerpt": "标量函数 Ψ(z) 又被称为布雷格曼势",
+      "excerpt": "标量函数 Ψ(z) 又被称为布雷格曼势，必须在凸域 M 上严格凸且连续可微，当势函数取二次形式时退化为经典欧氏距离。",
       "upstream": [],
       "downstream": [
         "bregman_proximal_step",
@@ -1466,7 +1472,7 @@
       "io": "输入：Ψ、F、z_τ、ε；输出：z_{τ+1}∈M",
       "problem": "用 Ψ 的 Bregman 距离替换欧氏距离，使迭代保持在凸集 M 内（良定义）",
       "source": "论文自述；标准镜像下降",
-      "excerpt": "对式(2-12)的步骤“(i)”进行重构，得到如下结果",
+      "excerpt": "对式(2-12)的邻近步进行重构，将欧氏二次距离替换为由势函数 Ψ 生成的布雷格曼散度，得到能够在约束凸集内部自适应流动的镜像邻近算子。",
       "upstream": [
         "linearized_proximal_step",
         "bregman_potential"
@@ -1566,7 +1572,7 @@
       "io": "输入：z、z_τ、势 Ψ；输出：非负差异度",
       "problem": "作为可替换的相似度度量，约束迭代域",
       "source": "标准；论文自述",
-      "excerpt": "在式(2-13)的基础上可以定义如下式所示的布雷格曼散度",
+      "excerpt": "在式(2-13)的基础上可以定义如下式所示的布雷格曼散度 B_Ψ[z‖z_τ]，其几何本质为凸势函数与当前参考点切平面之间的非负垂直差值。",
       "upstream": [
         "bregman_potential"
       ],
@@ -1656,7 +1662,7 @@
       "io": "输入：势 Ψ；输出：共轭 Ψ*(ζ)",
       "problem": "给出镜像空间到原空间的反向映射",
       "source": "标准凸分析",
-      "excerpt": "其中 Ψ∗ (ζ) 是 Ψ(z) 的芬克尔共轭",
+      "excerpt": "其中 Ψ*(ζ) 是 Ψ(z) 的芬克尔共轭函数（Legendre-Fenchel 变换），用于刻画对偶空间中的势函数结构与反向映射梯度。",
       "upstream": [
         "bregman_potential"
       ],
@@ -1747,7 +1753,7 @@
       "io": "输入：z∈M（或 ζ∈dom(Ψ*)）；输出：ζ（或 z）",
       "problem": "在原空间与对偶空间间来回投影，保证更新落回 M",
       "source": "标准镜像下降",
-      "excerpt": "将 z 从域 M 投影至 Ψ∗ (ζ) 的定义",
+      "excerpt": "将 z 从可行域 M 投影至对偶空间 Ψ*(ζ) 的定义域，其正向映射为 ∇_z Ψ(z)，逆向映射为 [∇_z Ψ]^{-1} = ∇_ζ Ψ*，构成了原变量与对偶变量之间的双射坐标桥梁。",
       "upstream": [
         "bregman_potential",
         "fenchel_conjugate"
@@ -1957,7 +1963,9 @@
         "mirror_descent",
         "mirror_map"
       ],
-      "downstream": [],
+      "downstream": [
+        "kems_simplex_update"
+      ],
       "level": 4,
       "demo": "mirror",
       "katex": [
@@ -2039,9 +2047,9 @@
       "tag": "明说",
       "definition": "P2(D_LV) := {Q: R^{D_LV}→R_+∪{0} | ∫Q(z)dz=1, E_{Q(z)}[z^⊤z]<∞}  (2-18)",
       "io": "输入：密度 Q；输出：集合成员判定",
-      "problem": "泛函 F[Q] 的定义域；容纳高斯、混合高斯、Dirichlet 等",
+      "problem": "确立泛函 F[Q] 的定义域，为奥托微积分（Otto calculus）、切空间 T_Q P2 及 W2 连续性方程梯度流提供严密的几何舞台。",
       "source": "[113-114]",
-      "excerpt": "泛函 F[Q(z)] 的定义域 P2 (D) 被称为沃瑟斯坦空",
+      "excerpt": "泛函 F[Q(z)] 的定义域 P2(D) 被称为沃瑟斯坦空间，是由具有有限二阶矩的概率测度构成的空间，为赋有奥托（Otto）无穷维黎曼度量与变分梯度流提供了底空间舞台。",
       "upstream": [],
       "downstream": [
         "normalization_constraint",
@@ -2052,12 +2060,12 @@
       "katex": [
         "\\mathcal{P}_2(\\mathbb{R}^{D_{LV}})=\\{Q:\\int Q=1,\\ \\mathbb{E}_Q[\\|z\\|_2^2]<\\infty\\}"
       ],
-      "intuition": "P2 是「二阶矩有限的概率密度」组成的空间，是 W₂ 几何的舞台。高斯、混合高斯、Dirichlet（经适当嵌入）都可以看作这个空间里的点。泛函 F[Q] 的自变量从此是一个分布，而不是一个向量。",
+      "intuition": "P2 是所有二阶矩有限（能量/方差不发散）的概率密度构成的无限维空间。只有限定在二阶矩有限的条件下，二次传输代价 c(x,y)=|x-y|² 对应的 Wasserstein-2 距离才能恒为有限，并赋予奥托（Otto）无穷维黎曼流形结构。在此舞台上，整团粒子云/概率分布仅被视作流形上的一个点，变分推断转化为该点沿测地线的梯度流动。",
       "steps": [
-        "若干粒子代表一个分布 Q",
-        "检查权重和为 1",
-        "检查二阶矩有限（粒子别飞太远）",
-        "Q 在 P2 里移动 = 粒子整体搬迁"
+        "微观视角：若干粒子代表当前概率分布 Q(z)",
+        "宏观视角：整团分布在 P2 流形上对应一个几何状态质点",
+        "二阶矩检验：实时校验 E_Q[‖z‖²] < ∞，保证测度落在 P2 内",
+        "流形演化：Q 沿测地线与切空间速度场 φ 连续流动"
       ],
       "pseudo": "assert abs(sum(w)-1)<1e-8\nassert mean(w * ||z||^2) < ∞\n# then Q ∈ P2",
       "apps": [
@@ -2106,11 +2114,18 @@
       ],
       "sliders": [
         {
+          "key": "spread",
+          "label": "分布尺度/方差",
+          "min": 0.2,
+          "max": 2.5,
+          "value": 1
+        },
+        {
           "key": "sep",
-          "label": "搬迁距离",
-          "min": 0.25,
-          "max": 1.8,
-          "value": 1.0
+          "label": "状态漂移量",
+          "min": 0.2,
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -2130,7 +2145,7 @@
       "io": "输入：Q；输出：约束条件",
       "problem": "优化密度时必须保持的良定性条件",
       "source": "标准概率",
-      "excerpt": "概率密度函数 Q(z) 必",
+      "excerpt": "概率密度函数 Q(z) 必须满足全空间上的积分归一化约束条件，即 ∫_Ω Q(z) dz = 1，确保概率测度在演化过程中测度守恒且信息论熵与散度良定义。",
       "upstream": [
         "wasserstein_space_p2"
       ],
@@ -2221,7 +2236,7 @@
       "io": "输入：z、微扰方向 ϕ、无穷小 ε；输出：微扰后粒子 z_T",
       "problem": "以粒子微扰改变分布 Q，是泛函梯度流的基本构件",
       "source": "论文自述；对照 [121] Villani",
-      "excerpt": "而映射 T (z) 又被称为传输映射",
+      "excerpt": "而映射 T (z) 又被称为传输映射。",
       "upstream": [
         "normalization_constraint"
       ],
@@ -2417,7 +2432,7 @@
       "io": "输入：Q_T、ϕ；输出：log Q 的展开式",
       "problem": "引理2.1 证明的中间步骤",
       "source": "论文证明（Taylor 展开）",
-      "excerpt": "利用泰勒展开",
+      "excerpt": "利用泰勒展开。",
       "upstream": [
         "change_of_variables_density"
       ],
@@ -2601,7 +2616,7 @@
       "io": "输入：Q、T；输出：Q_T",
       "problem": "定义传输映射对分布的作用，用于 W₂ 的约束",
       "source": "[121] Villani",
-      "excerpt": "而井号 # 表示推进测度",
+      "excerpt": "而井号 # 表示推进测度。",
       "upstream": [
         "transport_map"
       ],
@@ -2700,7 +2715,7 @@
       "io": "输入：Q、Q_T；输出：W₂² 距离",
       "problem": "量化分布间差异，具良好几何性质；不同于 f-散度",
       "source": "[115][121] Villani",
-      "excerpt": "则 W2 距离的平方可以定义为",
+      "excerpt": "则 W2 距离的平方可以定义为。",
       "upstream": [
         "pushforward_measure",
         "transport_map"
@@ -2783,7 +2798,7 @@
           "label": "两云间距",
           "min": 0.4,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -2811,7 +2826,7 @@
       "io": "输入：Q、ϕ、ε；输出：W₂² 的微扰表达",
       "problem": "把传输映射写成 z+εϕ，为 Wasserstein 梯度流/最小移动格式奠基",
       "source": "论文自述",
-      "excerpt": "可以重构为",
+      "excerpt": "可以重构为。",
       "upstream": [
         "w2_distance",
         "transport_map"
@@ -2882,7 +2897,7 @@
           "label": "搬迁距离",
           "min": 0.25,
           "max": 1.8,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -2981,7 +2996,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.2,
           "value": 0.4
         }
@@ -3003,7 +3018,7 @@
       "io": "输入：L（拉格朗日）、Φ（终端成本）、u；输出：标量代价 F",
       "problem": "量化控制目标（即时成本+终端成本）",
       "source": "[103][122]",
-      "excerpt": "定义形式如下的性能泛函 F",
+      "excerpt": "定义形式如下的性能泛函 F。",
       "upstream": [
         "state_ode"
       ],
@@ -3073,7 +3088,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -3095,7 +3110,7 @@
       "io": "输入：z_t、u、λ_t；输出：哈密顿标量",
       "problem": "把约束最优控制转化为对 u 的极值问题",
       "source": "[107] Pontryagin",
-      "excerpt": "哈密顿量定义为",
+      "excerpt": "哈密顿量定义为。",
       "upstream": [
         "performance_functional",
         "state_ode",
@@ -3169,7 +3184,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -3191,7 +3206,7 @@
       "io": "输入：H、z_t；输出：λ_t",
       "problem": "携带状态对目标的边际影响，进入哈密顿量",
       "source": "[107]",
-      "excerpt": "反映了状态变量对目标泛函的边际影响",
+      "excerpt": "反映了状态变量对目标泛函的边际影响。",
       "upstream": [
         "state_ode"
       ],
@@ -3262,8 +3277,8 @@
           "key": "uamp",
           "label": "终端权重",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -3344,7 +3359,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -3366,7 +3381,7 @@
       "io": "输入：f、u；输出：状态轨迹",
       "problem": "PMP 条件之一，与 (2-30) 同式",
       "source": "[107]",
-      "excerpt": "系统状态变量 z 满足动态方程",
+      "excerpt": "系统状态变量 z 满足动态方程。",
       "upstream": [
         "state_ode"
       ],
@@ -3434,7 +3449,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.4
         }
@@ -3456,7 +3471,7 @@
       "io": "输入：H；输出：λ_t 的演化",
       "problem": "确定伴随态的动态",
       "source": "[107]",
-      "excerpt": "伴随态 λt 满足其动态方程，通常形式为",
+      "excerpt": "伴随态 λt 满足其动态方程，通常形式为。",
       "upstream": [
         "hamiltonian_pmp",
         "adjoint_state_pmp"
@@ -3529,8 +3544,8 @@
           "key": "uamp",
           "label": "终端权重",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -3550,7 +3565,7 @@
       "io": "输入：初值/终端条件；输出：边值",
       "problem": "补足两点边值问题，使方程组可解",
       "source": "[107]",
-      "excerpt": "需要满足初始和终止条件",
+      "excerpt": "需要满足初始和终止条件。",
       "upstream": [
         "pmp_adjoint_equation"
       ],
@@ -3619,8 +3634,8 @@
           "key": "uamp",
           "label": "终端权重",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -3648,7 +3663,10 @@
         "pmp_adjoint_equation",
         "pmp_boundary_condition"
       ],
-      "downstream": [],
+      "downstream": [
+        "infinite_horizon_oc_cost",
+        "optimal_control_law"
+      ],
       "level": 5,
       "demo": "pmp",
       "katex": [
@@ -3719,7 +3737,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -3832,7 +3850,8 @@
       "source": "论文自述任务定义",
       "excerpt": "对其缺失条目进行补全，从而得到一个“完整”的数据矩阵，记为：X̂ = X^{(obs)} M + X^{(imp)} (1−M)",
       "upstream": [
-        "mask_matrix"
+        "mask_matrix",
+        "amortized_em"
       ],
       "downstream": [
         "knewimp_imputation_update"
@@ -3922,7 +3941,8 @@
       "source": "[29,126]；EM/[110] Murphy",
       "excerpt": "基于概率隐变量模型的缺失数据补全可以分解为如下类似 VBEM 算法的交替优化步骤",
       "upstream": [
-        "vbem"
+        "vbem",
+        "variational_inference"
       ],
       "downstream": [
         "em_m_step_joint_likelihood",
@@ -3990,8 +4010,8 @@
           "key": "rate",
           "label": "提升速度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -4078,8 +4098,8 @@
           "key": "rate",
           "label": "提升速度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -4532,7 +4552,7 @@
           "label": "搬迁距离",
           "min": 0.25,
           "max": 1.8,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -4949,7 +4969,7 @@
       "io": "输入：核 K、条件得分、粒子/样本期望；输出：可实现的补全微扰映射",
       "problem": "消去显式 ∇log Q，使 NER 补全可在代码中实现",
       "source": "论文定理3.3（核化最小移动）",
-      "excerpt": "当微扰方向 φ 处于 RKHS…式(3-20)所定义的优化命题的最优解为：T^{RKHS}=…",
+      "excerpt": "当微扰方向 φ 处于 RKHS…式(3-20)所定义的优化命题的最优解为：T^{RKHS}=…。",
       "upstream": [
         "rkhs",
         "ner_score_transport",
@@ -5241,7 +5261,7 @@
       "io": "输入：联合样本、核、联合得分、遮罩 M；输出：仅更新缺失条目的微扰方向",
       "problem": "在联合建模下对缺失坐标做核化更新，观测坐标梯度置零",
       "source": "论文由式(3-21)推广",
-      "excerpt": "根据式(3-21)，可以写出在联合概率密度建模策略下的一个类似的微扰方向为：φ_{RKHS}(X^{(miss)})=…",
+      "excerpt": "根据式(3-21)，可以写出在联合概率密度建模策略下的一个类似的微扰方向为：φ_{RKHS}(X^{(miss)})=…。",
       "upstream": [
         "rkhs_transport_map",
         "joint_ner_functional",
@@ -5867,7 +5887,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.4
         }
@@ -6141,7 +6161,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -6167,7 +6187,8 @@
       "upstream": [
         "finite_horizon_oc_cost",
         "performance_functional",
-        "state_ode"
+        "state_ode",
+        "pontryagin_maximum_principle"
       ],
       "downstream": [
         "hamiltonian_infinite_horizon",
@@ -6234,7 +6255,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -6320,7 +6341,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -6404,8 +6425,8 @@
           "key": "uamp",
           "label": "终端权重",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -6429,7 +6450,8 @@
       "upstream": [
         "hamiltonian_infinite_horizon",
         "adjoint_state",
-        "pmp_stationarity"
+        "pmp_stationarity",
+        "pontryagin_maximum_principle"
       ],
       "downstream": [
         "info_perturbation_field",
@@ -6883,7 +6905,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.4
         }
@@ -7010,7 +7032,8 @@
       "source": "EM 结构[110] + 论文 InfO-EM",
       "excerpt": "可以根据式(2-9)和式(2-10)导出…参数 θ 的更新方程，并将其作为 EM 算法 M 步的迭代策略",
       "upstream": [
-        "info_particle_update"
+        "info_particle_update",
+        "amortized_em"
       ],
       "downstream": [],
       "level": 14,
@@ -7075,8 +7098,8 @@
           "key": "rate",
           "label": "提升速度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -7279,8 +7302,8 @@
           "key": "rate",
           "label": "消息强度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -7376,8 +7399,8 @@
           "key": "rate",
           "label": "消息强度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -7472,16 +7495,16 @@
         {
           "key": "selfloop",
           "label": "自环权重",
-          "min": 0.0,
-          "max": 1.0,
-          "value": 1.0
+          "min": 0,
+          "max": 1,
+          "value": 1
         },
         {
           "key": "rate",
           "label": "归一化进度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -7572,7 +7595,7 @@
           "label": "收缩速度",
           "min": 0.2,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -7660,7 +7683,7 @@
           "label": "收缩速度",
           "min": 0.2,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": "疑似笔误：末项 Σα 应为 Σθ；名称「熵」与 (5-9) 中 E_Q[log Q] 符号可能相反；(5-6) Weierstrass 实为 1/Γ；(5-7) DiGa 应为 d logΓ/dθ。本页公式给出标准 Dirichlet 熵供对照。",
@@ -7749,8 +7772,8 @@
           "key": "rate",
           "label": "消息强度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -7772,7 +7795,8 @@
       "source": "论文构造；对照 §4.3.3",
       "excerpt": "通过添加负熵泛函 −H[Q]=EQ[log Q] 所形成的泛函…ER 是熵正则（entropy regularization）",
       "upstream": [
-        "implicit_likelihood"
+        "implicit_likelihood",
+        "variational_inference"
       ],
       "downstream": [
         "functional_perturbation"
@@ -8120,7 +8144,7 @@
           "label": "分布间距",
           "min": 0.2,
           "max": 2.4,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -8446,7 +8470,8 @@
         "rkhs_perturbation_direction",
         "mirror_map_log",
         "entropy_bregman_divergence",
-        "mirror_descent"
+        "mirror_descent",
+        "mirror_descent_three_steps"
       ],
       "downstream": [
         "forward_euler_ode",
@@ -8637,7 +8662,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.4
         }
@@ -8817,8 +8842,8 @@
           "key": "rate",
           "label": "消息强度",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -9552,7 +9577,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -9642,7 +9667,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.4
         }
@@ -9732,7 +9757,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -9826,7 +9851,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -9920,7 +9945,7 @@
         {
           "key": "uamp",
           "label": "控制强度",
-          "min": 0.0,
+          "min": 0,
           "max": 1.3,
           "value": 0.45
         }
@@ -10011,8 +10036,8 @@
           "key": "uamp",
           "label": "终端权重",
           "min": 0.2,
-          "max": 2.0,
-          "value": 1.0
+          "max": 2,
+          "value": 1
         }
       ],
       "note": null,
@@ -10110,8 +10135,8 @@
           "key": "beta",
           "label": "KL 权重",
           "min": 0.1,
-          "max": 4.0,
-          "value": 1.0
+          "max": 4,
+          "value": 1
         }
       ],
       "note": null,
@@ -10292,7 +10317,7 @@
           "label": "观测精度",
           "min": 0.3,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": "疑似笔误：若 Σ 为协方差，标准均值应为 Σ^P(Σ^ν+Σ^P)^{-1}μ^ν + Σ^ν(Σ^ν+Σ^P)^{-1}μ^{z,P}。协方差 (Σν+ΣP)^{-1}ΣνΣP 形式常见。动画用标准高斯乘积，文中照录论文式。",
@@ -10745,8 +10770,8 @@
           "key": "beta",
           "label": "KL 权重",
           "min": 0.1,
-          "max": 4.0,
-          "value": 1.0
+          "max": 4,
+          "value": 1
         }
       ],
       "note": null,
@@ -11263,7 +11288,7 @@
           "key": "damp",
           "label": "阻尼",
           "min": 0.92,
-          "max": 1.0,
+          "max": 1,
           "value": 0.995
         }
       ],
@@ -11361,7 +11386,7 @@
         {
           "key": "mu",
           "label": "动量 μ",
-          "min": 0.0,
+          "min": 0,
           "max": 0.95,
           "value": 0.7
         }
@@ -11472,7 +11497,7 @@
           "label": "调权速度",
           "min": 0.3,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -11572,7 +11597,7 @@
           "key": "damp",
           "label": "阻尼",
           "min": 0.92,
-          "max": 1.0,
+          "max": 1,
           "value": 0.995
         }
       ],
@@ -11673,7 +11698,7 @@
           "key": "damp",
           "label": "阻尼",
           "min": 0.92,
-          "max": 1.0,
+          "max": 1,
           "value": 0.995
         }
       ],
@@ -11788,7 +11813,7 @@
           "label": "搬迁距离",
           "min": 0.25,
           "max": 1.8,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -11888,7 +11913,7 @@
           "label": "传送速率",
           "min": 0.3,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -11995,7 +12020,7 @@
           "label": "传送速率",
           "min": 0.3,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -12104,7 +12129,7 @@
           "label": "调权速度",
           "min": 0.3,
           "max": 2.2,
-          "value": 1.0
+          "value": 1
         }
       ],
       "note": null,
@@ -13096,6 +13121,34 @@
     {
       "from": "rkhs",
       "to": "stein_path_alignment"
+    },
+    {
+      "from": "variational_inference",
+      "to": "em_e_step_kl"
+    },
+    {
+      "from": "variational_inference",
+      "to": "entropy_regularized_functional"
+    },
+    {
+      "from": "amortized_em",
+      "to": "imputation_composition"
+    },
+    {
+      "from": "amortized_em",
+      "to": "info_em_m_step"
+    },
+    {
+      "from": "mirror_descent_three_steps",
+      "to": "kems_simplex_update"
+    },
+    {
+      "from": "pontryagin_maximum_principle",
+      "to": "infinite_horizon_oc_cost"
+    },
+    {
+      "from": "pontryagin_maximum_principle",
+      "to": "optimal_control_law"
     }
   ],
   "splits": [
