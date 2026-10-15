@@ -58,33 +58,43 @@ def sample_js():
 
 def set_phase_js(phase: int) -> str:
     return f"""() => {{
+      const P = window.__OP_PLAYER;
+      if (P && typeof P.setPhase === 'function') {{
+        P.setPhase({phase});
+        return true;
+      }}
       const S = window.__CH4_S;
       if (!S) return false;
       S.playing = false;
-      S.t = {phase} * 2.4 + 0.18;
+      S.t = {phase} * 2.4 + 1.15;
       S.phase = {phase};
-      const impl = window.OP_ANIMS && S.sim && window.OP_ANIMS[S.sim.tag];
+      const impl = window.OP_ANIMS && window.OP_ANIMS[S.opId || (S.sim && S.sim.tag)];
       if (impl && impl.tick) {{
         try {{ impl.tick(S, 0.03); }} catch (e) {{}}
       }}
+      if (P && P.redraw) P.redraw();
       return true;
     }}"""
 
 
 def set_slider_js(key: str, value: float) -> str:
     return f"""() => {{
-      const S = window.__CH4_S;
-      if (!S) return false;
-      S.sliders[{key!r}] = {value};
+      const P = window.__OP_PLAYER;
+      if (P && typeof P.setSlider === 'function') {{
+        P.setSlider({key!r}, {value});
+      }}
+      const S = window.__CH4_S || (P && P.S);
+      if (S) S.sliders[{key!r}] = {value};
       const inp = document.querySelector('input[data-k="{key}"]');
       if (inp) {{
         inp.value = {value};
         inp.dispatchEvent(new Event('input', {{bubbles:true}}));
       }}
-      const impl = window.OP_ANIMS && S.sim && window.OP_ANIMS[S.sim.tag];
-      if (impl && impl.tick) {{
+      const impl = window.OP_ANIMS && S && window.OP_ANIMS[S.opId || (S.sim && S.sim.tag)];
+      if (impl && impl.tick && S) {{
         try {{ impl.tick(S, 0.05); impl.tick(S, 0.05); }} catch (e) {{}}
       }}
+      if (P && P.redraw) P.redraw();
       return true;
     }}"""
 

@@ -1743,6 +1743,16 @@
       const Tmap = (z) => z + eps * phi(z);
       const m = mapper(boxOf(S, { t: 48 }), -2.6, 2.6, 0, 0.9);
       axes(ctx, m, T, { xl: "z", yl: "密度" });
+      /* 体积→密度：1/|T'| 加深填充 */
+      const dphi = (z) => { const s = 1 / Math.cosh(z); return -(s * s); };
+      for (let i = 0; i < 24; i++) {
+        const z = -2.6 + 5.2 * (i + 0.5) / 24;
+        const det = Math.abs(1 + eps * dphi(z));
+        const inv = 1 / Math.max(0.15, det);
+        ctx.fillStyle = alpha(T.c2, clamp((inv - 0.6) / 2.4, 0.05, 0.55));
+        const x0 = m.X(-2.6 + 5.2 * i / 24), x1 = m.X(-2.6 + 5.2 * (i + 1) / 24);
+        ctx.fillRect(x0, m.box.y0, x1 - x0, m.box.h);
+      }
       const H0 = hist(S.sim.z, -2.6, 2.6, 20);
       const moved = S.sim.z.map(Tmap);
       const H1 = hist(moved, -2.6, 2.6, 20);
@@ -1764,7 +1774,8 @@
         curve(ctx, m, (x) => gauss(x, 0, 0.85), 80, T.mu, 1);
         if (S.phase === 3) callout(ctx, 56, 54, eps > 0.4 ? "ε 大：线性近似开始失效" : "小 ε：形状微变", T, T.c6);
       }
-      legend(ctx, [{ c: T.c2, l: "原粒子" }, { c: T.c3, l: "T#Q" }, { c: T.c5, l: "φ 箭头" }], S.W - 130, 48, T);
+      S.metrics["中心 1/|T'|"] = 1 / Math.max(0.15, Math.abs(1 + eps * dphi(0)));
+      legend(ctx, [{ c: T.c2, l: "1/|T'| 热力" }, { c: T.c3, l: "T#Q" }, { c: T.c5, l: "φ 箭头" }], S.W - 150, 48, T);
     },
   });
 
@@ -1869,21 +1880,26 @@
     tick(S, dt) {
       const vx = sl(S, "vx", 0.6);
       const N = S.sim.N, Q = S.sim.Q;
-      const dx = 4.8 / (N - 1);
-      const flux = new Float64Array(N + 1);
-      for (let i = 1; i < N; i++) {
-        const x = -2.4 + dx * (i - 0.5);
-        const phi = vx * (0.55 - 0.15 * x); /* 流向 +x，略有会聚 */
-        const up = phi >= 0 ? Q[i - 1] : Q[i];
-        flux[i] = up * phi;
+      const dx = 4.8 / N;
+      if (S.sim.mass0 == null) {
+        let m0 = 0; for (let i = 0; i < N; i++) m0 += Q[i] * dx;
+        S.sim.mass0 = m0;
       }
-      const nQ = new Float64Array(N);
-      for (let i = 0; i < N; i++) nQ[i] = Q[i] - dt * 1.8 * (flux[i + 1] - flux[i]) / dx;
-      for (let i = 0; i < N; i++) Q[i] = Math.max(0, nQ[i]);
-      let mass = 0; for (let i = 0; i < N; i++) mass += Q[i];
-      if (mass > 0) for (let i = 0; i < N; i++) Q[i] /= mass;
+      const flux = new Float64Array(N);
+      for (let i = 0; i < N; i++) {
+        const im = (i - 1 + N) % N;
+        const phi = vx * (0.55 + 0.22 * Math.sin(TWO * i / N));
+        flux[i] = (phi >= 0 ? Q[im] : Q[i]) * phi;
+      }
+      const dtA = Math.min(dt * 1.8, 0.4 * dx / Math.max(0.12, Math.abs(vx)));
+      for (let i = 0; i < N; i++) {
+        const ip = (i + 1) % N;
+        Q[i] = Math.max(0, Q[i] - dtA / dx * (flux[ip] - flux[i]));
+      }
+      let mass = 0; for (let i = 0; i < N; i++) mass += Q[i] * dx;
       S.sim.mass = mass;
-      S.metrics["质量"] = mass;
+      S.metrics["∑Q"] = mass;
+      S.metrics["∑Q₀"] = S.sim.mass0;
       S.metrics["流速"] = vx;
       let mean = 0;
       for (let i = 0; i < N; i++) mean += (-2.4 + dx * i) * Q[i];
@@ -1913,8 +1929,8 @@
       }
       if (S.phase >= 2) callout(ctx, 56, 54, "质量从源流向汇", T, T.c5);
       if (S.phase === 3) {
-        const ok = Math.abs(S.sim.mass - 1) < 0.08;
-        callout(ctx, S.W - 200, 54, "∫Q=" + S.sim.mass.toFixed(3) + (ok ? " 守恒" : ""), T, ok ? T.c4 : T.c6);
+        const ok = Math.abs(S.sim.mass - (S.sim.mass0 || 1)) < 0.05 * (S.sim.mass0 || 1);
+        callout(ctx, S.W - 220, 54, "∑Q=" + S.sim.mass.toFixed(3) + (ok ? " 周期守恒" : ""), T, ok ? T.c4 : T.c6);
       }
       legend(ctx, [{ c: T.c2, l: "Q(z,τ)" }, { c: T.c5, l: "速度场 φ" }], S.W - 140, 48, T);
     },
@@ -2282,7 +2298,7 @@
       glow(ctx, m1.X(0), m1.Y(W.z[0]), 5, T.c3);
       if (S.phase >= 1) {
         glow(ctx, m1.X(1), m1.Y(W.z[W.n]), 6, T.c6);
-        callout(ctx, m1.X(0.7), m1.Y(W.z[W.n]) - 8, "λ(T)=∂Φ/∂z", T, T.c6);
+        callout(ctx, m1.X(0.7), m1.Y(W.z[W.n]) - 8, "λ(T)=∇ψ=∂Φ/∂z", T, T.c7);
       }
       if (S.phase >= 2) {
         drawTraj(ctx, m2, W.lam, T.c7, 2.4);
@@ -2459,7 +2475,7 @@
       if (S.phase === 1 || S.phase === 2) {
         ctx.strokeStyle = T.c6; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(m2.X(1), m2.Y(m2.yMin)); ctx.lineTo(m2.X(1), m2.Y(m2.yMax)); ctx.stroke();
-        callout(ctx, m2.X(0.55), m2.Y(W.lam[W.n]), "钉 λ(T) 或 λ(∞)=0", T, T.c6);
+        callout(ctx, m2.X(0.55), m2.Y(W.lam[W.n]), "终端横截 λ(T)=∇ψ", T, T.c7);
       }
       if (S.phase === 3) {
         ctx.setLineDash([5, 4]);

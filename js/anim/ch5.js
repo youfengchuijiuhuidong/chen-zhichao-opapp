@@ -633,6 +633,20 @@
         }
       };
       drawM(nam.A, 16, "Â 二值+自环", ph === 0);
+      if (ph <= 1) {
+        const gx = S.W * 0.58, gy = 58, gw = S.W * 0.4, gh = S.H - 120;
+        const pos = [
+          { x: gx + 0.18 * gw, y: gy + 0.16 * gh },
+          { x: gx + 0.55 * gw, y: gy + 0.12 * gh },
+          { x: gx + 0.18 * gw, y: gy + 0.68 * gh },
+          { x: gx + 0.55 * gw, y: gy + 0.64 * gh },
+          { x: gx + 0.88 * gw, y: gy + 0.40 * gh },
+        ];
+        drawGraph(ctx, pos, [0.45, 0.5, 0.48, 0.52, 0.55], T, { hi: -1, edgeOn: true });
+        ctx.fillStyle = T.mu;
+        ctx.font = "11px sans-serif";
+        ctx.fillText(sl(S, "selfloop", 1) > 0.5 ? "自环开：对角 = 1" : "自环关：对角 = 0", gx, gy - 4);
+      }
       if (ph >= 1) {
         nam.deg.forEach((d, i) => {
           ctx.fillStyle = T.c5;
@@ -677,15 +691,17 @@
    * ============================================================ */
   OP.simplex_factorization = {
     init(S) {
-      const pts = [];
-      for (let i = 0; i < 5; i++) {
-        const z = [Math.random(), Math.random(), Math.random()];
-        pts.push(softmax(z));
-      }
-      S.sim = { pts, hist: [] };
+      const pts0 = [
+        [0.82, 0.11, 0.07],
+        [0.08, 0.18, 0.74],
+        [0.62, 0.28, 0.10],
+        [0.22, 0.55, 0.23],
+        [0.40, 0.12, 0.48],
+      ];
+      S.sim = { pts0, pts: pts0.map((p) => p.slice()), hist: [] };
     },
     tick(S, dt) {
-      const rate = S.sliders.rate != null ? S.sliders.rate : 1;
+      const rate = sl(S, "rate", 1);
       const tgts = [
         [0.7, 0.2, 0.1],
         [0.15, 0.7, 0.15],
@@ -693,14 +709,22 @@
         [0.45, 0.4, 0.15],
         [0.2, 0.5, 0.3],
       ];
-      const go = S.phase >= 3 ? 1 : 0.15;
-      S.sim.pts = S.sim.pts.map((p, i) => {
-        const g = p.map((v, k) => Math.log(tgts[i][k] + 1e-8) - Math.log(v + 1e-8));
-        return mirrorStep(p, g, dt * 1.6 * rate * go);
-      });
+      /* 暂停时 dt=0，仍按 rate 把行往目标插值，滑块立刻改柱宽/点位 */
+      const go = S.phase >= 3 ? 1 : S.phase >= 2 ? 0.62 : 0.18;
+      const mix = 1 - Math.exp(-0.72 * rate * go);
+      S.sim.pts = (S.sim.pts0 || []).map((p, i) =>
+        floorSimplex(p.map((v, k) => v + mix * (tgts[i][k] - v)))
+      );
+      if (S.phase >= 3 && dt > 0) {
+        S.sim.pts = S.sim.pts.map((p, i) => {
+          const g = p.map((v, k) => Math.log(tgts[i][k] + 1e-8) - Math.log(v + 1e-8));
+          return mirrorStep(p, g, dt * 1.4 * rate);
+        });
+      }
       const rs = S.sim.pts.map((p) => p[0] + p[1] + p[2]);
       S.metrics.行和均值 = rs.reduce((a, b) => a + b, 0) / rs.length;
       S.metrics.KL到目标 = klDisc(S.sim.pts[1], tgts[1]);
+      S.metrics.插值 = mix;
       pushHist(S.sim.hist, S.metrics.KL到目标, 70);
     },
     draw(ctx, S, T) {
@@ -1684,55 +1708,54 @@
    * ============================================================ */
   OP.forward_euler_ode = {
     init(S) {
-      const z0 = [1.8, -0.4, -1.4];
-      S.sim = { z: z0.slice(), pathC: [], pathE: [], pathBig: [], zE: z0.slice(), zB: z0.slice() };
+      S.sim = { pathC: [], pathE: [], pathBig: [], zE: { x: 1.1, y: 0.7 }, zB: { x: 1.1, y: 0.7 }, kappa: 0.6, omega: 2 };
     },
     tick(S) {
       const eps = sl(S, "eps", 0.2);
       const uamp = sl(S, "uamp", 0.4);
       const tgt = [0.15, 0.7, 0.15];
-      const z0 = [1.8, -0.4, -1.4];
-      const zStar = tgt.map((v) => Math.log(Math.max(1e-6, v)));
-      /* 对偶二次势。εκ∈(1,2) 时欧拉绕最优衰减振荡；>2 会发散，故按 κ 反比取步长 */
-      const k0 = 2.8 + 1.4 * uamp, k1 = 0.7 + 0.5 * uamp, k2 = 2.8 + 1.4 * uamp;
-      function gradF(z) {
-        return [
-          k0 * (z[0] - zStar[0]) + 0.65 * uamp * (z[1] - zStar[1]),
-          k1 * (z[1] - zStar[1]) - 0.65 * uamp * (z[0] - zStar[0]),
-          k2 * (z[2] - zStar[2]),
-        ];
+      /* 对偶平面线性振荡：dζ/dτ = −κζ + Jωζ，欧拉步 = 旋转+缩放 */
+      const kappa = 0.48 + 0.28 * uamp;
+      const omega = 1.75 + 1.15 * uamp;
+      const z0 = { x: 1.15, y: 0.82 };
+      function flow(p, h) {
+        const dx = -kappa * p.x + omega * p.y;
+        const dy = -omega * p.x - kappa * p.y;
+        return { x: p.x + h * dx, y: p.y + h * dy };
       }
-      function capZ(z) { return z.map((v) => clamp(v, -3.2, 3.2)); }
-      let zc = z0.slice();
-      const pathC = [dualXY(zc)];
-      for (let k = 0; k < 40; k++) {
-        for (let s = 0; s < 4; s++) {
-          const g = gradF(zc);
-          zc = capZ(zc.map((v, i) => v - 0.032 * g[i]));
-        }
-        pathC.push(dualXY(zc));
+      function capR(p, rmax) {
+        const r = Math.hypot(p.x, p.y);
+        if (r <= rmax || r < 1e-9) return p;
+        return { x: p.x * rmax / r, y: p.y * rmax / r };
       }
-      let ze = z0.slice();
-      const pathE = [dualXY(ze)];
-      const step = (0.22 + 0.55 * eps) / k0; /* εκ ≈ 0.22…0.6 */
-      for (let k = 0; k < 12; k++) {
-        const g = gradF(ze);
-        ze = capZ(ze.map((v, i) => v - step * g[i]));
-        pathE.push(dualXY(ze));
+      let zc = { x: z0.x, y: z0.y };
+      const pathC = [{ x: zc.x, y: zc.y }];
+      for (let k = 0; k < 90; k++) {
+        zc = flow(zc, 0.028);
+        pathC.push({ x: zc.x, y: zc.y });
       }
-      let zb = z0.slice();
-      const pathBig = [dualXY(zb)];
-      const stepB = (1.35 + 0.4 * eps) / k0; /* εκ ≈ 1.35…1.6 欠阻尼振荡 */
-      for (let k = 0; k < 14; k++) {
-        const g = gradF(zb);
-        zb = capZ(zb.map((v, i) => v - stepB * g[i]));
-        pathBig.push(dualXY(zb));
+      const hE = 0.16 + 0.18 * eps; /* 小步：沿螺线的折线 */
+      let ze = { x: z0.x, y: z0.y };
+      const pathE = [{ x: ze.x, y: ze.y }];
+      for (let k = 0; k < 16; k++) {
+        ze = capR(flow(ze, hE), 2.4);
+        pathE.push({ x: ze.x, y: ze.y });
+      }
+      const hB = 0.42 + 0.38 * eps; /* 大步：每拍转 ~60–90°，折线明显振荡 */
+      let zb = { x: z0.x, y: z0.y };
+      const pathBig = [{ x: zb.x, y: zb.y }];
+      for (let k = 0; k < 10; k++) {
+        zb = capR(flow(zb, hB), 2.35);
+        pathBig.push({ x: zb.x, y: zb.y });
       }
       S.sim.pathC = pathC; S.sim.pathE = pathE; S.sim.pathBig = pathBig;
       S.sim.zE = ze; S.sim.zB = zb; S.sim.eps = eps; S.sim.uamp = uamp;
-      const aE = softmax(S.phase >= 2 ? zb : ze);
+      S.sim.kappa = kappa; S.sim.omega = omega;
+      const zShow = S.phase === 2 ? zb : ze;
+      const aE = softmax([zShow.x, zShow.y, 0.15]);
       S.metrics.ε = eps;
       S.metrics.控制 = uamp;
+      S.metrics["hω"] = (S.phase === 2 ? hB : hE) * omega;
       S.metrics.行和 = aE[0] + aE[1] + aE[2];
       S.metrics.KL = klDisc(aE, tgt);
     },
@@ -1743,8 +1766,8 @@
       panel(ctx, bx, by, bw, bh, T, true, T.c7);
       ctx.fillStyle = T.tx;
       ctx.font = "12px sans-serif";
-      ctx.fillText("对偶平面  dζ/dτ = −∇F(softmax ζ)", bx + 8, by + 18);
-      const mx = bx + bw / 2, my = by + bh / 2 + 8, scd = 58;
+      ctx.fillText("对偶平面  dζ/dτ = −κζ + Jωζ   (镜像 ODE)", bx + 8, by + 18);
+      const mx = bx + bw / 2, my = by + bh / 2 + 8, scd = 68;
       ctx.strokeStyle = T.line;
       ctx.beginPath(); ctx.moveTo(bx + 8, my); ctx.lineTo(bx + bw - 8, my); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(mx, by + 28); ctx.lineTo(mx, by + bh - 8); ctx.stroke();
@@ -1752,6 +1775,18 @@
       ctx.beginPath();
       ctx.rect(bx + 1, by + 1, bw - 2, bh - 2);
       ctx.clip();
+      if (ph === 0) {
+        const kappa = nv(S.sim.kappa) || 0.6, omega = nv(S.sim.omega) || 2;
+        for (let i = -3; i <= 3; i++) {
+          for (let j = -3; j <= 3; j++) {
+            if (!i && !j) continue;
+            const x = i * 0.38, y = j * 0.38;
+            const dx = -kappa * x + omega * y, dy = -omega * x - kappa * y;
+            const L = Math.hypot(dx, dy) || 1;
+            arrow(ctx, mx + x * scd, my - y * scd, (dx / L) * 11, -(dy / L) * 11, aa(T, T.c4, 0.35, 0.45), 1);
+          }
+        }
+      }
       const strokePath = (path, col, dash, lw) => {
         if (!path || path.length < 2) return;
         ctx.beginPath();
@@ -1766,11 +1801,15 @@
         ctx.setLineDash([]);
       };
       strokePath(S.sim.pathC, T.c3, ph === 0 ? [] : [5, 4], 2.2);
+      roundDot(ctx, mx, my, 4, T.c3);
+      ctx.fillStyle = T.mu;
+      ctx.font = "10px sans-serif";
+      ctx.fillText("ζ*", mx + 6, my - 6);
       if (ph === 1 || ph === 3) {
         strokePath(S.sim.pathE, T.c5, [], 2.4);
         (S.sim.pathE || []).forEach((p, i) => {
           roundDot(ctx, mx + p.x * scd, my - p.y * scd, i === S.sim.pathE.length - 1 ? 6 : 3.2, T.c5);
-          if (ph === 3 && i < 8) {
+          if (ph === 3 && i < 9) {
             ctx.fillStyle = T.tx;
             ctx.font = "9px sans-serif";
             ctx.fillText(String(i), mx + p.x * scd + 4, my - p.y * scd - 6);
@@ -1779,24 +1818,31 @@
       }
       if (ph === 2) {
         strokePath(S.sim.pathBig, T.c6, [], 2.6);
-        (S.sim.pathBig || []).forEach((p) => {
+        (S.sim.pathBig || []).forEach((p, i) => {
           roundDot(ctx, mx + p.x * scd, my - p.y * scd, 5, T.c6);
+          if (i <= 8) {
+            ctx.fillStyle = T.tx;
+            ctx.font = "9px sans-serif";
+            ctx.fillText(String(i), mx + p.x * scd + 5, my - p.y * scd - 7);
+          }
         });
-        ctx.fillStyle = T.c6;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("ε 大：折线偏离光滑流，可能振荡", bx + 10, by + bh - 12);
       }
       ctx.restore();
+      if (ph === 2) {
+        ctx.fillStyle = T.c6;
+        ctx.font = "11px sans-serif";
+        ctx.fillText("ε 大：折线绕 ζ* 振荡并偏离光滑螺线", bx + 10, by + 34);
+      }
       const rx = S.W * 0.66;
-      const zShow = ph === 2 ? (S.sim.zB || S.sim.zE) : (S.sim.zE || S.sim.z);
-      const aE = softmax(zShow || S.sim.z);
+      const zShow = ph === 2 ? (S.sim.zB || S.sim.zE) : (S.sim.zE || { x: 0, y: 0 });
+      const aE = softmax([nv(zShow.x), nv(zShow.y), 0.15]);
       const cx = rx + 70, cy = S.H * 0.55, sc = 70;
       drawSimplex(ctx, cx, cy, sc, T);
       const p = simplexXY(aE[0], aE[1], aE[2], cx, cy, sc);
       roundDot(ctx, p.x, p.y, 6, ph === 2 ? T.c6 : T.c5);
       ctx.fillStyle = T.tx;
       ctx.font = "11px sans-serif";
-      ctx.fillText(ph >= 3 ? "对应 KEMS 离散步" : "拉回单纯形", rx, 56);
+      ctx.fillText(ph >= 3 ? "对应 KEMS 离散步" : "softmax 拉回单纯形", rx, 56);
       legend(ctx, [
         { c: T.c3, lab: "连续镜像 ODE" },
         { c: T.c5, lab: "前向欧拉折线" },

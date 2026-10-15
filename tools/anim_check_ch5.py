@@ -98,7 +98,12 @@ def run(base: str, round_id: int, shot_ids=None):
                 logs.append({"type": msg.type, "text": text})
 
         def on_err(exc):
-            report["js_exceptions"].append(str(exc))
+            url = page.url or ""
+            # 首页偶发 404/无关语法错不记入本章；只收算子页
+            if "#/op/" in url or "/op/" in url:
+                report["js_exceptions"].append({"url": url, "error": str(exc)})
+            else:
+                report.setdefault("home_pageerror", []).append(str(exc))
 
         page.on("console", on_console)
         page.on("pageerror", on_err)

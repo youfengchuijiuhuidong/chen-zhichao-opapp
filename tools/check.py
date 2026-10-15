@@ -55,7 +55,7 @@ def run(base: str, round_id: int):
         page.wait_for_timeout(400)
         home = page.evaluate(
             """() => ({
-              ops: window.APP_DATA && window.APP_DATA.operators.length,
+              ops: (window.OP_DATA || window.APP_DATA) && (window.OP_DATA || window.APP_DATA).operators.length,
               graph: !!document.querySelector('#graph g'),
               nodes: document.querySelectorAll('#graph .node').length,
               katex: document.querySelectorAll('.katex').length
