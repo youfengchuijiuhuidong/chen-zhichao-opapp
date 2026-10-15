@@ -22,6 +22,62 @@
     if (/Noto|WenQuanYi|Source Han|Droid Sans Fallback|PingFang|YaHei|Hiragino|OP_FONT/.test(f)) return;
     ctx.font = f.replace(/\b(sans-serif|serif|monospace|system-ui|ui-sans-serif|Arial|Helvetica)\b/gi, FONT_STACK);
   }
+
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r || 6, Math.abs(w) / 2, Math.abs(h) / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  if (!global.rr) global.rr = rr;
+
+  function glow(ctx, x, y, r, col) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+    ctx.restore();
+  }
+  if (!global.glow) global.glow = glow;
+
+  function banner(ctx, S, T, ph) {
+    if (ph == null) ph = (S && S.phase != null) ? S.phase : 0;
+    const txt = (S && S.steps && S.steps[ph]) || "";
+    ctx.font = "12px " + FONT_STACK;
+    let t = txt;
+    const W = (S && S.W) || 640;
+    while (t.length > 4 && ctx.measureText(t).width > W - 28) t = t.slice(0, -2);
+    if (t !== txt) t += "…";
+    const w = Math.min(W - 16, ctx.measureText(t).width + 18);
+    ctx.fillStyle = (T && T.dark) ? "rgba(251,191,36,0.15)" : "rgba(251,191,36,0.32)";
+    rr(ctx, 8, 5, w, 22, 5); ctx.fill();
+    ctx.fillStyle = (T && T.c5) || "#fbbf24";
+    ctx.fillRect(8, 5, 3, 22);
+    ctx.fillStyle = (T && T.tx) || "#ffffff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t, 16, 16);
+  }
+  if (!global.banner) global.banner = banner;
+
+  function callout(ctx, x, y, text, T, col) {
+    ctx.font = "11px " + FONT_STACK;
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = (T && T.dark) ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = col || (T && T.c5) || "#fbbf24";
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col || (T && T.tx) || "#ffffff";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
+  }
+  if (!global.callout) global.callout = callout;
   function randn() {
     let u = 0, v = 0;
     while (!u) u = Math.random();
@@ -480,7 +536,10 @@
       let px = 12;
       ctx.fillStyle = T.mu;
       ctx.font = px + "px " + FONT_STACK;
-      const cap = maxW != null ? maxW : 560;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      const maxAllowed = (ctx.canvas && ctx.canvas.width) ? (ctx.canvas.width / (window.devicePixelRatio || 1) - x - 12) : 560;
+      const cap = maxW != null ? maxW : Math.max(120, maxAllowed);
       while (px > 8 && ctx.measureText(text).width > cap) {
         px -= 1;
         ctx.font = px + "px " + FONT_STACK;

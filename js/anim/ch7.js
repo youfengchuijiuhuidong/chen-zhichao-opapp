@@ -46,6 +46,43 @@
     ctx.arcTo(x, y, x + w, y, R);
     ctx.closePath();
   }
+  var OP_FONT = global.OP_FONT_STACK || '"Noto Sans SC","PingFang SC",sans-serif';
+  function glow(ctx, x, y, r, col) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+    ctx.restore();
+  }
+  function banner(ctx, S, T) {
+    var txt = (S.steps && S.steps[S.phase]) || "";
+    ctx.font = "12px " + OP_FONT;
+    var t = txt;
+    while (t.length > 4 && ctx.measureText(t).width > S.W - 28) t = t.slice(0, -2);
+    if (t !== txt) t += "…";
+    var w = Math.min(S.W - 16, ctx.measureText(t).width + 18);
+    ctx.fillStyle = T.dark ? "rgba(251,191,36,0.15)" : "rgba(251,191,36,0.32)";
+    rr(ctx, 8, 5, w, 22, 5); ctx.fill();
+    ctx.fillStyle = T.c5;
+    ctx.fillRect(8, 5, 3, 22);
+    ctx.fillStyle = T.tx;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t, 16, 16);
+  }
+  function callout(ctx, x, y, text, T, col) {
+    ctx.font = "11px " + OP_FONT;
+    var w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = col || T.c5;
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col || T.tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
+  }
   function mulberry(a) {
     return function () {
       a |= 0;
@@ -166,14 +203,30 @@
     ctx.restore();
   }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
     ctx.save();
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    var maxW = 0;
+    items.forEach(function (it) {
+      var txt = it.l || it.lab || it.t || "";
+      var w = ctx.measureText(txt).width;
+      if (w > maxW) maxW = w;
+    });
+    var boxW = maxW + 24;
+    var boxH = items.length * 15 + 6;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    rr(ctx, x - 5, y - 4, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     items.forEach(function (it, i) {
       ctx.fillStyle = it.c;
       ctx.fillRect(x, y + i * 15, 9, 9);
       ctx.fillStyle = T.tx;
-      ctx.fillText(it.l, x + 14, y + i * 15 + 9);
+      ctx.fillText(it.l || it.lab || it.t || "", x + 14, y + i * 15 + 9);
     });
     ctx.restore();
   }
@@ -1428,6 +1481,7 @@
   }
   function frDraw(ctx, S, T) {
     banner(ctx, S, T);
+    var rate = sl(S, "rate", 1);
     var W = S.W, H = S.H;
     var cx = W * 0.46, cy = H * 0.58;
     var ph = S.phase;
@@ -1437,20 +1491,20 @@
     ctx.fillStyle = T.mu; ctx.font = "bold 11px " + OP_FONT; ctx.textAlign = "left";
     ctx.fillText("【上轨】Wasserstein W2 物理搬运（远距离代价高昂 ∝ Dist²）", 50, cy - 65);
 
-    var w2X = 120 + ((S.t * 60) % 220);
+    var w2X = 120 + ((S.t * 60 * rate) % 220);
     ctx.strokeStyle = T.line; ctx.setLineDash([2, 2]);
     ctx.beginPath(); ctx.moveTo(120, cy - 40); ctx.lineTo(340, cy - 40); ctx.stroke();
     ctx.setLineDash([]);
-    glow(ctx, w2X, cy - 40, 5, T.c2);
+    glow(ctx, w2X, cy - 40, 4 + 2 * rate, T.c2);
 
     // 下轨：Fisher-Rao 流形就地生灭/传送（本地消失 + 远端重组，成本与距离无关）
     ctx.fillStyle = T.mu;
     ctx.fillText("【下轨】Fisher-Rao 就地生灭（传送 Teleportation，代价与距离无关）", 50, cy + 20);
 
-    var massSource = Math.max(0, 1 - ((S.t * 0.4) % 1));
+    var massSource = Math.max(0, 1 - ((S.t * 0.4 * rate) % 1));
     var massTarget = 1 - massSource;
-    glow(ctx, 120, cy + 45, 8 * massSource + 1, T.c6);
-    glow(ctx, 340, cy + 45, 8 * massTarget + 1, T.c3);
+    glow(ctx, 120, cy + 45, (8 * massSource + 1) * Math.min(2, rate), T.c6);
+    glow(ctx, 340, cy + 45, (8 * massTarget + 1) * Math.min(2, rate), T.c3);
 
     // Dashboard
     var gx = W - 156, gy = 56;
@@ -1463,12 +1517,55 @@
     ctx.fillStyle = T.c2;
     ctx.fillText("W2 搬迁代价: 极高", gx, gy + 28);
     ctx.fillStyle = T.c3;
-    ctx.fillText("FR 生灭代价: 恒定常数", gx, gy + 44);
+    ctx.fillText("FR 传送速率: " + rate.toFixed(2), gx, gy + 44);
 
     if (ph === 0) callout(ctx, 30, 68, "阶段 1：当两个多峰工况相距甚远时，纯 W2 物理搬运极慢", T, T.c2);
     if (ph === 1) callout(ctx, 30, 68, "阶段 2：Fisher-Rao 机制允许概率质量就地消解与远端重组", T, T.c6);
     if (ph === 2) callout(ctx, 30, 68, "阶段 3：W2-FR 融合几何实现最优测地线跳跃", T, T.c3);
     if (ph === 3) callout(ctx, 30, 68, "阶段 4：工业多工况突变软测量的理论保证", T, T.c4);
+  }
+  /* ============================================================
+   * 10. 概率测度传送 — 不平衡 OT / Sinkhorn
+   * ============================================================ */
+  function sinkhornUB(a, b, C, eps, rho, iters) {
+    var n = a.length, m = b.length, i, j, t;
+    var K = [], u = [], v = [];
+    for (i = 0; i < n; i++) {
+      K[i] = [];
+      for (j = 0; j < m; j++) K[i][j] = Math.exp(-C[i][j] / (eps + 1e-8));
+      u[i] = 1;
+    }
+    for (j = 0; j < m; j++) v[j] = 1;
+    var ex = eps / (eps + rho);
+    for (t = 0; t < iters; t++) {
+      for (i = 0; i < n; i++) {
+        var Kv = 0;
+        for (j = 0; j < m; j++) Kv += K[i][j] * v[j];
+        u[i] = Math.pow(a[i] / (Kv + 1e-12), ex);
+      }
+      for (j = 0; j < m; j++) {
+        var KTu = 0;
+        for (i = 0; i < n; i++) KTu += K[i][j] * u[i];
+        v[j] = Math.pow(b[j] / (KTu + 1e-12), ex);
+      }
+    }
+    var pi = [], cost = 0, m1 = [], m2 = [];
+    for (j = 0; j < m; j++) m2[j] = 0;
+    for (i = 0; i < n; i++) {
+      pi[i] = []; m1[i] = 0;
+      for (j = 0; j < m; j++) {
+        pi[i][j] = u[i] * K[i][j] * v[j];
+        cost += pi[i][j] * C[i][j];
+        m1[i] += pi[i][j];
+        m2[j] += pi[i][j];
+      }
+    }
+    function kl(x, y) {
+      var s = 0, k;
+      for (k = 0; k < x.length; k++) s += x[k] * Math.log((x[k] + 1e-12) / (y[k] + 1e-12)) - x[k] + y[k];
+      return s;
+    }
+    return { pi: pi, cost: cost, m1: m1, m2: m2, kl1: kl(m1, a), kl2: kl(m2, b) };
   }
   function tpInit(S) {
     S.sim = { histB: [], histU: [] };
@@ -1723,20 +1820,25 @@
   }
   function steinDraw(ctx, S, T) {
     banner(ctx, S, T);
+    var h = sl(S, "v", 0.8);
     var W = S.W, H = S.H;
     var cx = W * 0.46, cy = H * 0.58;
     var sim = S.sim, ph = S.phase;
 
     // Draw Target Domain contour (pink)
+    var boxSize = 80 + 35 * h;
+    ctx.fillStyle = rgba(T.c6, T.dark ? 0.14 : 0.2);
+    ctx.fillRect(cx + 40, cy - 60, boxSize, boxSize);
     ctx.strokeStyle = T.c6;
     ctx.lineWidth = 2;
-    ctx.strokeRect(cx + 40, cy - 60, 110, 110);
+    ctx.strokeRect(cx + 40, cy - 60, boxSize, boxSize);
     ctx.fillStyle = T.c6; ctx.font = "11px " + OP_FONT; ctx.textAlign = "center";
-    ctx.fillText("目标域 (冷启动工况)", cx + 95, cy - 70);
+    ctx.fillText("目标域 (冷启动工况)", cx + 40 + boxSize / 2, cy - 68);
 
     // Draw Source Domain Particles migrating under Stein field
     var progress = Math.min(1.0, ((S.t * 0.25) % 1.2));
     ctx.lineWidth = 1;
+    var arrowL = 10 + 10 * h;
     sim.src.forEach(function (p, i) {
       var curX = cx - 110 + progress * 170 + Math.sin(i * 3 + S.t) * 12;
       var curY = cy - 20 + Math.cos(i * 2 + S.t) * 25;
@@ -1745,10 +1847,10 @@
       ctx.strokeStyle = T.c5;
       ctx.beginPath();
       ctx.moveTo(curX, curY);
-      ctx.lineTo(curX + 16, curY - 4);
+      ctx.lineTo(curX + arrowL, curY - 4);
       ctx.stroke();
 
-      glow(ctx, curX, curY, 4, T.c2);
+      glow(ctx, curX, curY, 3 + 2 * h, T.c2);
     });
 
     // Dashboard
@@ -1762,7 +1864,7 @@
     ctx.fillStyle = T.c2;
     ctx.fillText("源域粒子数: 22", gx, gy + 28);
     ctx.fillStyle = T.c5;
-    ctx.fillText("核互斥力 + 目标引力", gx, gy + 44);
+    ctx.fillText("核带宽 h = " + h.toFixed(2), gx, gy + 44);
 
     if (ph === 0) callout(ctx, 30, 68, "阶段 1：冷启动初期，源域（历史工况）与新工况严重漂移", T, T.c2);
     if (ph === 1) callout(ctx, 30, 68, "阶段 2：Stein 变分向量场通过再生核驱动分布迁移", T, T.c5);

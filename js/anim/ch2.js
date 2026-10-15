@@ -265,16 +265,31 @@
     ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
   }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
     ctx.save();
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    let maxW = 0;
+    items.forEach((it) => {
+      const txt = it.l || it.lab || it.t || "";
+      const w = ctx.measureText(txt).width;
+      if (w > maxW) maxW = w;
+    });
+    const boxW = maxW + 26;
+    const boxH = items.length * 15 + 8;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    rr(ctx, x - 6, y - 10, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     items.forEach((it, i) => {
       const yy = y + i * 15;
       ctx.fillStyle = it.c;
       ctx.fillRect(x, yy - 4, 11, 8);
       ctx.fillStyle = T.tx;
-      ctx.fillText(it.l, x + 15, yy);
+      ctx.fillText(it.l || it.lab || it.t, x + 15, yy);
     });
     ctx.restore();
   }
@@ -599,12 +614,12 @@
           if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
         }
         ctx.stroke(); ctx.setLineDash([]);
-        callout(ctx, 70, 54, "MC 样本 n=" + nMC + "（β 控制）", T, T.c5);
+        callout(ctx, 168, 54, "MC 样本 n=" + nMC + "（β 控制）", T, T.c5);
       }
       if (S.phase === 3) {
         const gap = 0.55 * (1.05 - beta);
         curve(ctx, m, (t) => ll(t) - gap, 80, T.c4, 2.4);
-        callout(ctx, 70, 54, "下界 / 得分 代替硬积分", T, T.c4);
+        callout(ctx, 168, 54, "下界 / 得分 代替硬积分", T, T.c4);
       }
       spark(ctx, S.sim.histL, S.W - 130, 44, 110, 28, T, T.c3);
       legend(ctx, [{ c: T.c2, l: "真边缘似然" }, { c: T.c5, l: "MC 估计" }, { c: T.c4, l: "下界示意" }], 56, 48, T);
@@ -655,7 +670,7 @@
         /* 等号：把 a,b 拉近，f 近常数 */
         const mid = 0.2;
         curve(ctx, m, (x) => f(mid) + 0.02 * (x - mid), 40, T.c4, 2);
-        callout(ctx, 70, 54, "f 对 Q 近常数 ⇒ 间隙→0", T, T.c4);
+        callout(ctx, Math.max(168, m.X(mid) - 40), 54, "f 对 Q 近常数 ⇒ 间隙→0", T, T.c4);
       }
       legend(ctx, [{ c: T.c2, l: "凹函数 log" }, { c: T.c5, l: "弦 = 期望组合" }, { c: T.c6, l: "曲线上的点" }], 56, 48, T);
     },
@@ -723,8 +738,8 @@
       spark(ctx, S.sim.hist, rb.x0 + 8, rb.y0 + 20, rb.w - 16, 40, T, T.c4);
       legend(ctx, [{ c: T.mu, l: "后验 P(z|x)" }, { c: T.c2, l: "变分 Q" }, { c: T.c5, l: "ELBO" }], 56, 48, T);
       if (S.phase === 1) callout(ctx, m.X(qmu), m.Y(gauss(qmu, qmu, qsig)) - 8, "Q 远离 ⇒ 间隙大", T, T.c6);
-      if (S.phase === 2) callout(ctx, m.X(qmu), 56, "优化 Q：KL→0，ELBO 贴上  β=" + fit.toFixed(2), T, T.c4);
-      if (S.phase === 3) callout(ctx, 70, 54, "再抬 θ，似然本身上升", T, T.c3);
+      if (S.phase === 2) callout(ctx, Math.max(168, m.X(qmu)), 56, "优化 Q：KL→0，ELBO 贴上  β=" + fit.toFixed(2), T, T.c4);
+      if (S.phase === 3) callout(ctx, Math.max(168, m.X(postM) - 20), 56, "再抬 θ，似然本身上升", T, T.c3);
       hitBox(S, "state", m.box);
       hit(S, "energy", { type: "rect", x: rb.x0, y: rb.y0, w: rb.w, h: rb.h });
     },
@@ -786,8 +801,8 @@
       ctx.fillText("Q‖P", bx + 14, by + 84);
       ctx.fillText("P‖Q", bx + 58, by + 84);
       if (S.phase === 1) callout(ctx, bx - 20, by, "二者不等：KL 不是距离", T, T.c5);
-      if (S.phase === 2) callout(ctx, 70, 54, "拉开均值，KL 急升", T, T.c6);
-      if (S.phase === 3) callout(ctx, 70, 54, "Q=P 时 KL=0", T, T.c4);
+      if (S.phase === 2) callout(ctx, 160, 54, "拉开均值，KL 急升", T, T.c6);
+      if (S.phase === 3) callout(ctx, 160, 54, "Q=P 时 KL=0", T, T.c4);
       legend(ctx, [{ c: T.c2, l: "Q" }, { c: T.c6, l: "P" }, { c: T.c4, l: "重叠" }], 56, 48, T);
     },
   });
@@ -837,7 +852,7 @@
       ctx.fillStyle = T.mu; ctx.font = "10px sans-serif"; ctx.textAlign = "left";
       ctx.fillText("KL 轨迹", S.W - 140, 42);
       if (S.phase === 3) callout(ctx, m.X(mu), 58, "族太窄：只能盖一个峰", T, T.c6);
-      if (S.phase === 2) callout(ctx, 64, 54, "梯度下降减小 KL  rate=" + sl(S, "rate", 0.8).toFixed(2), T, T.c5);
+      if (S.phase === 2) callout(ctx, 168, 54, "梯度下降减小 KL  rate=" + sl(S, "rate", 0.8).toFixed(2), T, T.c5);
       legend(ctx, [{ c: T.mu, l: "多峰后验" }, { c: T.c2, l: "高斯 Q" }], 56, 48, T);
     },
   });
@@ -1267,7 +1282,7 @@
       }
       glow(ctx, X(S.sim.x), Y(S.sim.y), 6, T.c6);
       if (S.phase === 3) callout(ctx, 56, 54, eps > 0.5 ? "ε 太大：易振荡" : "ε 太小则爬行；拖动滑块对比", T, T.c6);
-      legend(ctx, [{ c: T.c2, l: "F 等高线" }, { c: T.c6, l: "当前 z" }, { c: T.c5, l: "负梯度" }], 56, 48, T);
+      legend(ctx, [{ c: T.c2, l: "F 等高线" }, { c: T.c6, l: "当前 z" }, { c: T.c5, l: "负梯度" }], S.W - 140, 48, T);
     },
   });
 
@@ -1310,7 +1325,7 @@
         arrow(ctx, m.X(z0), m.Y(F(z0)), m.X(znew) - m.X(z0), m.Y(F(znew)) - m.Y(F(z0)), T.c4, 2);
         callout(ctx, 64, 54, "模型最小点 = 一步 GD：z−ε∇F", T, T.c4);
       }
-      legend(ctx, [{ c: T.c2, l: "F" }, { c: T.c5, l: "切平面" }, { c: T.c7, l: "邻近二次" }], 56, 48, T);
+      legend(ctx, [{ c: T.c2, l: "F" }, { c: T.c5, l: "切平面" }, { c: T.c7, l: "邻近二次" }], S.W - 140, 48, T);
     },
   });
 
@@ -1911,7 +1926,7 @@
       const eps = sl(S, "eps", 0.2);
       const phi = (z) => -Math.tanh(z); /* 向 0 收缩 */
       const Tmap = (z) => z + eps * phi(z);
-      const m = mapper(boxOf(S, { t: 48 }), -2.6, 2.6, 0, 0.9);
+      const m = mapper(boxOf(S, { t: 56 }), -2.6, 2.6, 0, 0.9);
       axes(ctx, m, T, { xl: "z", yl: "密度" });
       /* 体积→密度：1/|T'| 加深填充 */
       const dphi = (z) => { const s = 1 / Math.cosh(z); return -(s * s); };
@@ -1936,13 +1951,13 @@
           arrow(ctx, x0, m.box.y1 - 16, x1 - x0, 0, T.c5, 1.4);
           glow(ctx, x0, m.box.y1 - 16, 3, T.c2);
         });
-        callout(ctx, 56, 54, "每个粒子沿 φ(z)=−tanh z 走 ε", T, T.c5);
+        callout(ctx, 56, 42, "每个粒子沿 φ(z)=−tanh z 走 ε", T, T.c5);
       }
       if (S.phase >= 2) {
         drawHist(ctx, m, H0, T.mu);
         drawHist(ctx, m, H1, T.c3);
         curve(ctx, m, (x) => gauss(x, 0, 0.85), 80, T.mu, 1);
-        if (S.phase === 3) callout(ctx, 56, 54, eps > 0.4 ? "ε 大：线性近似开始失效" : "小 ε：形状微变", T, T.c6);
+        if (S.phase === 3) callout(ctx, 56, 42, eps > 0.4 ? "ε 大：线性近似开始失效" : "小 ε：形状微变", T, T.c6);
       }
       S.metrics["中心 1/|T'|"] = 1 / Math.max(0.15, Math.abs(1 + eps * dphi(0)));
       legend(ctx, [{ c: T.c2, l: "1/|T'| 热力" }, { c: T.c3, l: "T#Q" }, { c: T.c5, l: "φ 箭头" }], S.W - 150, 48, T);
@@ -2102,7 +2117,7 @@
       if (S.phase >= 2) callout(ctx, 56, 54, "质量从源流向汇", T, T.c5);
       if (S.phase === 3) {
         const ok = Math.abs(S.sim.mass - (S.sim.mass0 || 1)) < 0.05 * (S.sim.mass0 || 1);
-        callout(ctx, S.W - 220, 54, "∑Q=" + S.sim.mass.toFixed(3) + (ok ? " 周期守恒" : ""), T, ok ? T.c4 : T.c6);
+        callout(ctx, 56, 76, "∑Q=" + S.sim.mass.toFixed(3) + (ok ? " 周期守恒" : ""), T, ok ? T.c4 : T.c6);
       }
       legend(ctx, [{ c: T.c2, l: "Q(z,τ)" }, { c: T.c5, l: "速度场 φ" }], S.W - 140, 48, T);
       hitBox(S, "state", m.box);
@@ -2382,7 +2397,7 @@
       ctx.fillStyle = T.c6; ctx.fillRect(bx + 40, by + 80 - clamp(C.Phi, 0, 2) / 2 * 80, 28, clamp(C.Phi, 0, 2) / 2 * 80);
       ctx.fillStyle = T.tx; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
       ctx.fillText("∫L", bx + 14, by + 94); ctx.fillText("Φ", bx + 54, by + 94);
-      if (S.phase === 3) callout(ctx, 50, 54, "改 u（滑块）⇒ 总代价 F 变", T, T.c4);
+      if (S.phase === 3) callout(ctx, 168, 54, "改 u（滑块）⇒ 总代价 F 变", T, T.c4);
       legend(ctx, [{ c: T.c2, l: "轨迹 z" }, { c: T.c5, l: "控制 u / 能量" }, { c: T.c6, l: "终端 Φ" }], 56, 48, T);
       badge(ctx, 16, S.H - 72, "u=" + uamp.toFixed(2) + "  F=" + C.F.toFixed(3), T, T.c4);
     },
@@ -2655,7 +2670,7 @@
         ctx.setLineDash([5, 4]);
         drawTraj(ctx, m1, W.z.map((v) => v + 0.7), alpha(T.c6, 0.7), 1.6);
         ctx.setLineDash([]);
-        callout(ctx, 50, 54, "不满足边值的轨迹被丢弃", T, T.c6);
+        callout(ctx, 58, 54, "不满足边值的轨迹被丢弃", T, T.c6);
       }
       badge(ctx, 16, S.H - 72, "w=" + w.toFixed(2) + "  λ(T)=" + W.lam[W.n].toFixed(2), T, T.c6);
       hitBox(S, "state", m1.box);

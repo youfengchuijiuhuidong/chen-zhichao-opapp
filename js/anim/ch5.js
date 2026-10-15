@@ -8,6 +8,7 @@
   const OP = (global.OP_ANIMS = global.OP_ANIMS || {});
   const TWO = Math.PI * 2;
   const SQ3 = Math.sqrt(3);
+  const FONT = global.OP_FONT_STACK || '"Noto Sans SC","PingFang SC",sans-serif';
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (t) => {
@@ -182,15 +183,63 @@
     ctx.textAlign = "left";
     ctx.fillText((S.phase + 1) + " / " + S.steps.length + "  " + step, 18, 35);
   }
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r || 6, Math.abs(w) / 2, Math.abs(h) / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function glow(ctx, x, y, r, col) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+    ctx.restore();
+  }
+  function callout(ctx, x, y, text, T, col) {
+    ctx.font = "11px " + FONT;
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = col || T.c5;
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col || T.tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
+  }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
+    ctx.save();
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    let maxW = 0;
+    items.forEach((it) => {
+      const txt = it.lab || it.l || it.t || "";
+      const w = ctx.measureText(txt).width;
+      if (w > maxW) maxW = w;
+    });
+    const boxW = maxW + 24;
+    const boxH = items.length * 15 + 6;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    rr(ctx, x - 5, y - 4, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     for (let i = 0; i < items.length; i++) {
       ctx.fillStyle = items[i].c;
       ctx.fillRect(x, y + i * 15, 10, 10);
       ctx.fillStyle = T.tx;
-      ctx.fillText(items[i].lab, x + 14, y + i * 15 + 9);
+      ctx.fillText(items[i].lab || items[i].l || items[i].t || "", x + 14, y + i * 15 + 9);
     }
+    ctx.restore();
   }
   function axisBox(ctx, x0, y0, x1, y1, T, xlab, ylab) {
     ctx.strokeStyle = T.line;

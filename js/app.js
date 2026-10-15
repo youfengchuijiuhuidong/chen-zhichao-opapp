@@ -24,7 +24,6 @@
   const view = document.getElementById("view");
   const q = document.getElementById("q");
   const res = document.getElementById("res");
-  const chips = document.getElementById("chips");
   const themeBtn = document.getElementById("theme");
   let anim = null;
   let graph = null;
@@ -152,25 +151,24 @@
   if (tocBd) tocBd.addEventListener("click", () => setTocOpen(false));
   const tocPanel = document.getElementById("toc-panel");
   if (tocPanel) tocPanel.hidden = false;
-
-  Object.keys(CH).sort().forEach((k) => {
-    const meta = CH[k];
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.style.setProperty("--c", meta.color);
-    b.textContent = meta.short;
-    b.dataset.ch = k;
-    b.addEventListener("click", () => {
-      chFilter = chFilter === +k ? 0 : +k;
-      [...chips.children].forEach((c) => c.classList.toggle("on", +c.dataset.ch === chFilter));
-      if (graph) graph.filterCh(chFilter || null);
-      document.querySelectorAll(".op-mini").forEach((el) => {
-        const on = !chFilter || +el.dataset.ch === chFilter;
-        el.style.opacity = on ? "1" : "0.28";
-      });
+  function setChapterFilter(k) {
+    chFilter = chFilter === +k ? 0 : +k;
+    document.querySelectorAll("#graph-chips .chip").forEach((c) => {
+      c.classList.toggle("on", +c.dataset.ch === chFilter);
     });
-    chips.appendChild(b);
-  });
+    document.querySelectorAll(".home-ch-btn").forEach((b) => {
+      b.classList.toggle("on", +b.dataset.ch === chFilter);
+    });
+    if (graph) graph.filterCh(chFilter || null);
+    document.querySelectorAll(".op-mini").forEach((el) => {
+      const on = !chFilter || +el.dataset.ch === chFilter;
+      el.style.opacity = on ? "1" : "0.28";
+    });
+    document.querySelectorAll(".split").forEach((el) => {
+      const on = !chFilter || +el.dataset.ch === chFilter;
+      el.style.opacity = on ? "1" : "0.38";
+    });
+  }
 
   function search(text) {
     const t = (text || "").trim().toLowerCase();
@@ -433,7 +431,7 @@
     const m = DATA.meta;
     view.innerHTML = `
       <section class="hero">
-        <div class="card">
+        <div class="card hero-main-card">
           <h1>陈智超论文 · 算子谱系交互讲义</h1>
           <p class="muted">${esc(m.thesis || "")}</p>
           <div class="kpis">
@@ -442,23 +440,85 @@
             <div class="kpi"><b>${(m.by_tag && m.by_tag["明说"]) || 106}</b><span class="muted">明说 / ${(m.by_tag && m.by_tag["自证"]) || 14} 自证 / ${(m.by_tag && m.by_tag["推断"]) || 7} 推断</span></div>
           </div>
           <div class="home-ch">
-            ${[2,3,4,5,6,7].map((c) => `<span style="border-color:${CH[c].color};color:${CH[c].color}">${esc(CH[c].title)} · ${m.by_chapter[c] || m.by_chapter[String(c)]}</span>`).join("")}
+            ${[2,3,4,5,6,7].map((c) => `<button type="button" class="home-ch-btn ${chFilter === c ? "on" : ""}" data-ch="${c}" style="border-color:${CH[c].color};color:${CH[c].color}">${esc(CH[c].title)} · ${m.by_chapter[c] || m.by_chapter[String(c)]}</button>`).join("")}
           </div>
-          <p class="muted" style="margin-top:10px">滚轮缩放 · 拖动平移 · 离开后再回来会恢复视口，上次点过的节点会呼吸两秒。搜索 / 章节用 Spotlight（非匹配变淡到 0.12，不删节点）。</p>
+          <div class="core-paths">
+            <div class="cp-head">
+              <span class="cp-title">理论演化主干脉络</span>
+              <span class="muted" style="font-size:11.5px">点主线高亮谱系全链 · 快速切入</span>
+            </div>
+            <div class="cp-grid">
+              <div class="cp-item" data-path="ch3">
+                <div class="cp-tag" style="--c:#2dd4bf">🌟 补全·负熵链 (Ch3)</div>
+                <div class="cp-desc">EM隐式熵缺陷 → 翻转为负熵泛函 F^NER → Wasserstein空间得分传输</div>
+                <div class="cp-links">
+                  <a href="#/op/negative_entropy_regularization" class="cp-lk">负熵正则</a>
+                  <a href="#/op/ner_score_transport" class="cp-lk">得分传输</a>
+                </div>
+              </div>
+              <div class="cp-item" data-path="ch4">
+                <div class="cp-tag" style="--c:#a3e635">⚡ 稳态·粒子链 (Ch4)</div>
+                <div class="cp-desc">打破单高斯限族 → 经验测度量子化 → 无穷时域哈密顿最优控制 → RKHS拟设</div>
+                <div class="cp-links">
+                  <a href="#/op/particle_quantization" class="cp-lk">粒子量子化</a>
+                  <a href="#/op/infinite_horizon_oc_cost" class="cp-lk">无穷时域控制</a>
+                  <a href="#/op/rkhs_ansatz_control" class="cp-lk">RKHS拟设</a>
+                </div>
+              </div>
+              <div class="cp-item" data-path="ch5">
+                <div class="cp-tag" style="--c:#fbbf24">🔄 约束·镜像链 (Ch5)</div>
+                <div class="cp-desc">单形归一化邻接 → Bregman凸势规避显式Gamma/Digamma → 镜像梯度与KEMS</div>
+                <div class="cp-links">
+                  <a href="#/op/entropy_bregman_potential" class="cp-lk">Bregman势</a>
+                  <a href="#/op/mirror_descent" class="cp-lk">镜像下降</a>
+                  <a href="#/op/kems_simplex_update" class="cp-lk">KEMS单形更新</a>
+                </div>
+              </div>
+              <div class="cp-item" data-path="ch6">
+                <div class="cp-tag" style="--c:#fb7185">⏳ 动态·时域链 (Ch6)</div>
+                <div class="cp-desc">非线性非高斯 → 有限时域最优控制 → Girsanov路径测度变换 → ADMM三步解耦</div>
+                <div class="cp-links">
+                  <a href="#/op/finite_horizon_oc_cost_ch6" class="cp-lk">有限时域控制</a>
+                  <a href="#/op/girsanov_density_ratio" class="cp-lk">Girsanov变换</a>
+                  <a href="#/op/admm_three_steps" class="cp-lk">ADMM三步</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="muted hero-hint">滚轮缩放 · 拖动平移 · 鼠标移动局部聚焦与视口跟随。搜索 / 章节用 Spotlight（非匹配变淡到 0.12，不删节点）。</p>
         </div>
-        <div class="card">
-          <h2>章级分叉</h2>
+        <div class="card split-card">
+          <div class="split-head">
+            <h2>章级分叉</h2>
+            <span class="muted" style="font-size:12px">关键理论分水岭与技术替代</span>
+          </div>
           <div class="split-list" id="splits"></div>
         </div>
       </section>
       <div class="card graph-wrap">
-        <div class="ghint">谱系导航图 · 视口写入 sessionStorage · lastOpId 呼吸高亮</div>
-        <div class="gbar">
-          <button type="button" id="gfit">适应窗口</button>
-          <button type="button" id="gclr">清除高亮</button>
+        <div class="graph-topbar">
+          <div class="gt-left">
+            <span class="gt-title">谱系导航图</span>
+            <div class="chips" id="graph-chips">
+              <button type="button" class="chip ${!chFilter ? "on" : ""}" data-ch="0">全部</button>
+              ${Object.keys(CH).sort().map((k) => `
+                <button type="button" class="chip ${chFilter === +k ? "on" : ""}" data-ch="${k}" style="--c:${CH[k].color}">
+                  ${esc(CH[k].short)}
+                </button>
+              `).join("")}
+            </div>
+          </div>
+          <div class="gbar">
+            <button type="button" id="gfluid" class="fluid-btn on" title="开关鼠标局部聚焦与视口跟随（很灵动的动效）">✨ 灵动漫游：开</button>
+            <button type="button" id="gfit" title="自适应画布大小">适应窗口</button>
+            <button type="button" id="gclr" title="清除高亮和搜索结果">清除高亮</button>
+          </div>
         </div>
-        <svg id="graph" role="img" aria-label="算子谱系图"></svg>
-        <div class="legend">实线=明说 · 虚线=自证 · 点线=推断 · ! = 疑似笔误 · ◆=章级分叉 · 黄=上游 · 绿=下游 · 淡化=Spotlight 非匹配</div>
+        <div class="graph-canvas-wrap">
+          <svg id="graph" role="img" aria-label="算子谱系图"></svg>
+          <div class="ghint">视口自动记忆 · 鼠标移动局部聚焦与视口跟随 · 滚轮缩放 · 拖拽平移</div>
+          <div class="legend">实线=明说 · 虚线=自证 · 点线=推断 · ! = 疑似笔误 · ◆=章级分叉 · 黄=上游 · 绿=下游 · 淡化=Spotlight 非匹配</div>
+        </div>
       </div>
       <section class="home-list card">
         <h2>全部算子</h2>
@@ -468,10 +528,23 @@
     (DATA.splits || []).forEach((s) => {
       const el = document.createElement("div");
       el.className = "split";
+      const mCh = (s.node || "").match(/ch(\d+)/);
+      const chNum = mCh ? +mCh[1] : 0;
+      el.dataset.ch = chNum;
+      const chColor = (CH[chNum] && CH[chNum].color) || "#5b8cff";
+      el.style.setProperty("--sc", chColor);
+
       const after = (s["切换后算子"] || []).map(linkOp).join("");
-      el.innerHTML = `<b>${esc(s.title)}</b><div class="muted">${esc(s.why || "")}</div>
-        <div class="muted" style="margin-top:6px">${esc(s.choice || "")}</div>
-        <div class="links" style="margin-top:8px">${after}</div>`;
+      const tag = s.tag ? `<span class="split-tag">${esc(s.tag)}</span>` : "";
+      const secs = (s.sections || []).length ? `<span class="split-sec">${esc(s.sections.join(" · "))}</span>` : "";
+      el.innerHTML = `
+        <div class="split-title-row">
+          <b>${esc(s.title)}</b>
+          <div>${secs} ${tag}</div>
+        </div>
+        <div class="muted">${esc(s.why || "")}</div>
+        <div class="muted" style="margin-top:4px">${esc(s.choice || "")}</div>
+        <div class="links" style="margin-top:6px">${after}</div>`;
       splits.appendChild(el);
     });
     const grid = document.getElementById("grid");
@@ -491,10 +564,67 @@
     });
     if (chFilter) graph.filterCh(chFilter);
     if ((q.value || "").trim()) applySearchSpotlight();
+
+    // Wire up graph chips
+    document.querySelectorAll("#graph-chips .chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const k = +btn.dataset.ch;
+        setChapterFilter(k);
+      });
+    });
+
+    // Wire up hero chapter buttons
+    document.querySelectorAll(".home-ch-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const k = +btn.dataset.ch;
+        setChapterFilter(k);
+        const gWrap = document.querySelector(".graph-wrap");
+        if (gWrap) gWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    // Wire up core paths (clicking item highlights the path nodes)
+    const CORE_PATH_OPS = {
+      ch3: ["negative_entropy_regularization", "optimal_perturbation_direction", "ner_score_transport"],
+      ch4: ["particle_quantization", "infinite_horizon_oc_cost", "hamiltonian_infinite_horizon", "rkhs_ansatz_control"],
+      ch5: ["entropy_bregman_potential", "mirror_descent", "kems_simplex_update"],
+      ch6: ["finite_horizon_oc_cost_ch6", "girsanov_density_ratio", "path_marginal_kl_inequality", "admm_three_steps"],
+    };
+    document.querySelectorAll(".cp-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
+        const pKey = item.dataset.path;
+        const opIds = CORE_PATH_OPS[pKey];
+        if (opIds && graph) {
+          graph.highlightIds(opIds);
+          const gWrap = document.querySelector(".graph-wrap");
+          if (gWrap) gWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
+
+    const fluidBtn = document.getElementById("gfluid");
+    if (fluidBtn) {
+      const updateFluidBtn = () => {
+        const isF = graph && typeof graph.isFluid === "function" ? graph.isFluid() : true;
+        fluidBtn.classList.toggle("on", isF);
+        fluidBtn.textContent = isF ? "✨ 灵动漫游：开" : "✨ 灵动漫游：关";
+      };
+      updateFluidBtn();
+      fluidBtn.addEventListener("click", () => {
+        if (graph && typeof graph.setFluid === "function") {
+          const next = !graph.isFluid();
+          graph.setFluid(next);
+          updateFluidBtn();
+        }
+      });
+    }
+
     document.getElementById("gfit").addEventListener("click", () => graph.fit());
     document.getElementById("gclr").addEventListener("click", () => {
       q.value = "";
       res.hidden = true;
+      setChapterFilter(0);
       graph.clearHighlight();
     });
   }
@@ -615,15 +745,16 @@
             </div>
             <p class="muted">周期 Timeline · 暂停 / 单步 / +1 Step · 点阶段跳转。同章 ← →；空格播放。</p>
             <div class="demo-canvas-wrap" id="demo-wrap">
-              <aside class="color-legend" aria-label="色彩语义">
-                <div data-hit="state"><i class="sw sw-state"></i>蓝 · 状态 / 密度</div>
-                <div data-hit="ctrl"><i class="sw sw-ctrl"></i>橙 · 控制 / 速度场</div>
-                <div data-hit="adj"><i class="sw sw-adj"></i>紫 · 协态</div>
-                <div data-hit="energy"><i class="sw sw-energy"></i>绿 · 能量 / 熵 / 代价</div>
-                <div><i class="sw sw-base"></i>灰虚线 · 基准</div>
-              </aside>
               <canvas id="demo" width="640" height="360"></canvas>
             </div>
+            <aside class="color-legend" aria-label="色彩语义">
+              <span class="color-legend-label">色彩语义：</span>
+              <div class="color-legend-item" data-hit="state"><i class="sw sw-state"></i>蓝 · 状态 / 密度</div>
+              <div class="color-legend-item" data-hit="ctrl"><i class="sw sw-ctrl"></i>橙 · 控制 / 速度场</div>
+              <div class="color-legend-item" data-hit="adj"><i class="sw sw-adj"></i>紫 · 协态</div>
+              <div class="color-legend-item" data-hit="energy"><i class="sw sw-energy"></i>绿 · 能量 / 熵 / 代价</div>
+              <div class="color-legend-item"><i class="sw sw-base"></i>灰虚线 · 基准</div>
+            </aside>
             <div class="player-bar">
               <div class="timeline" id="timeline" role="slider" aria-label="周期进度"></div>
               <div class="caption" id="cap"></div>

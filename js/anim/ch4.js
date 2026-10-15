@@ -6,6 +6,7 @@
   const OP = (global.OP_ANIMS = global.OP_ANIMS || {});
   const TWO = Math.PI * 2;
   const PI = Math.PI;
+  const FONT = global.OP_FONT_STACK || '"Noto Sans SC","PingFang SC",sans-serif';
 
   /* ---------- 数值小工具 ---------- */
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -258,10 +259,26 @@
     ctx.textAlign = "left";
   }
   function modeLabels(ctx, V, T) {
+    ctx.save();
     ctx.font = "11px sans-serif";
-    ctx.fillStyle = T.c6;
-    ctx.fillText("峰 A", V.X(-1.12) - 12, V.Y(0.85));
-    ctx.fillText("峰 B", V.X(1.16) - 12, V.Y(0.85));
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const modes = [
+      { lab: "峰 A", x: -1.12, y: 0.85 },
+      { lab: "峰 B", x: 1.16, y: 0.85 },
+    ];
+    modes.forEach((m) => {
+      const px = V.X(m.x), py = V.Y(m.y);
+      const tw = ctx.measureText(m.lab).width;
+      ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.78)" : "rgba(255, 255, 255, 0.85)";
+      ctx.fillRect(px - tw / 2 - 4, py - 7, tw + 8, 14);
+      ctx.strokeStyle = rgba(T.c6, 0.45);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px - tw / 2 - 3.5, py - 6.5, tw + 7, 13);
+      ctx.fillStyle = T.c6;
+      ctx.fillText(m.lab, px, py);
+    });
+    ctx.restore();
   }
   function bind(S, id) {
     S.sim.tag = id;
@@ -306,8 +323,8 @@
     ctx.textAlign = "left";
     if (ylab) {
       ctx.fillStyle = T.mu;
-      ctx.textAlign = "left";
-      ctx.fillText(ylab, V.x0 + 6, V.y0 + 12);
+      ctx.textAlign = "right";
+      ctx.fillText(ylab, V.x0 - 4, V.y0 + 10);
     }
   }
   function arrow(ctx, x, y, dx, dy, color, w) {
@@ -329,6 +346,52 @@
     ctx.closePath();
     ctx.fill();
   }
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r || 6, Math.abs(w) / 2, Math.abs(h) / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function glow(ctx, x, y, r, col) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+    ctx.restore();
+  }
+  function banner(ctx, S, T) {
+    const txt = (S.steps && S.steps[S.phase]) || "";
+    ctx.font = "12px " + FONT;
+    let t = txt;
+    while (t.length > 4 && ctx.measureText(t).width > S.W - 28) t = t.slice(0, -2);
+    if (t !== txt) t += "…";
+    const w = Math.min(S.W - 16, ctx.measureText(t).width + 18);
+    ctx.fillStyle = T.dark ? "rgba(251,191,36,0.15)" : "rgba(251,191,36,0.32)";
+    rr(ctx, 8, 5, w, 22, 5); ctx.fill();
+    ctx.fillStyle = T.c5;
+    ctx.fillRect(8, 5, 3, 22);
+    ctx.fillStyle = T.tx;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t, 16, 16);
+  }
+  function callout(ctx, x, y, text, T, col) {
+    ctx.font = "11px " + FONT;
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = col || T.c5;
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col || T.tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
+  }
   function caption(ctx, S, T, text, on) {
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
@@ -348,16 +411,33 @@
     return w + 6;
   }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
+    ctx.save();
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    let maxW = 0;
+    items.forEach((it) => {
+      const txt = it.lab || it.l || it.t || "";
+      const w = ctx.measureText(txt).width;
+      if (w > maxW) maxW = w;
+    });
+    const boxW = maxW + 24;
+    const boxH = items.length * 15 + 8;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    ctx.fillRect(x - 5, y - 12, boxW, boxH);
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 4.5, y - 11.5, boxW - 1, boxH - 1);
     let yy = y;
     items.forEach((it) => {
       ctx.fillStyle = it.c;
       ctx.fillRect(x, yy - 8, 10, 10);
       ctx.fillStyle = T.tx;
-      ctx.fillText(it.lab, x + 14, yy);
+      ctx.fillText(it.lab || it.l || it.t || "", x + 14, yy);
       yy += 15;
     });
+    ctx.restore();
   }
   function panel(ctx, x, y, w, h, T, on) {
     ctx.fillStyle = on
@@ -523,16 +603,20 @@
       bind(S, "particle_quantization");
     },
     tick(S) {
+      const spread = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
       const ph = S.phase;
-      const nActive = ph === 0 ? 8 : (ph === 1 ? 18 : (ph === 2 ? 36 : 64));
+      const baseN = ph === 0 ? 8 : (ph === 1 ? 18 : (ph === 2 ? 36 : 64));
+      const nActive = Math.round(baseN * (0.6 + 0.8 * spread));
       S.metrics["粒子数 N"] = nActive;
       S.metrics["误差界 O(1/√N)"] = (1 / Math.sqrt(nActive)).toFixed(3);
     },
     draw(ctx, S, T) {
       banner(ctx, S, T);
+      const spread = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
       const W = S.W, H = S.H;
       const cx = W * 0.46, cy = H * 0.58;
       const scX = W * 0.20, scY = H * 0.32;
+      const sig = 0.2 + 0.3 * spread;
 
       // 上层：连续光滑真实密度 Q(z)（蓝色面积曲线）
       ctx.fillStyle = T.dark ? "rgba(91,140,255,0.18)" : "rgba(91,140,255,0.22)";
@@ -541,7 +625,7 @@
       ctx.beginPath();
       ctx.moveTo(cx - 1.8 * scX, cy);
       for (let x = -1.8; x <= 1.8; x += 0.05) {
-        const dens = 0.5 * (gauss(x, -1.0, 0.35) + gauss(x, 1.0, 0.35));
+        const dens = 0.5 * (gauss(x, -1.0, sig) + gauss(x, 1.0, sig));
         ctx.lineTo(cx + x * scX, cy - dens * scY);
       }
       ctx.lineTo(cx + 1.8 * scX, cy);
@@ -551,7 +635,8 @@
       ctx.lineWidth = 1;
 
       // 下层：离散 Dirac delta 脉冲针
-      const n = S.metrics["粒子数 N"] || 16;
+      const n = Math.min(64, S.metrics["粒子数 N"] || 16);
+      const needleH = 20 + 36 * spread;
       for (let i = 0; i < n; i++) {
         const x = S.sim.pts[i];
         const px = cx + x * scX;
@@ -559,9 +644,9 @@
         ctx.lineWidth = 1.8;
         ctx.beginPath();
         ctx.moveTo(px, cy);
-        ctx.lineTo(px, cy + 38);
+        ctx.lineTo(px, cy + needleH);
         ctx.stroke();
-        glow(ctx, px, cy + 38, 3, T.c3);
+        glow(ctx, px, cy + needleH, 3, T.c3);
       }
       ctx.lineWidth = 1;
 
@@ -940,11 +1025,10 @@
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const V = view2d(S);
+      const V = view2d(S, [-2.5, 2.5], [-1.7, 1.7], { r: 96 });
       const amp = S.sim.amp != null ? S.sim.amp : 0.7;
       heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
-      modeLabels(ctx, V, T);
       const scP = (x, y) => { const P = post2d(x, y); return { x: P.sx, y: P.sy }; };
       const scU = (x, y) => ({ x: -amp * y - 0.15 * x, y: amp * x - 0.15 * y });
       const scF = (x, y) => { const a = scP(x, y), b = scU(x, y); return { x: a.x + b.x, y: a.y + b.y }; };
@@ -959,6 +1043,7 @@
         ctx.font = "12px sans-serif";
         ctx.fillText("u 过大 → 旋转过冲", V.x0 + 8, V.y0 + 16);
       }
+      modeLabels(ctx, V, T);
       dots(ctx, S.sim.pts || S.sim.pts0, V, T.c2, ph === 0 ? 5 : 4);
       caption(ctx, S, T, ["后验得分 ∇log P（灰）", "控制 u（红）", "合成 φ = 得分 + u", "调 u：过冲 / 振荡"][ph], true);
       legend(ctx, [
@@ -966,7 +1051,7 @@
         { c: T.c6, lab: "u(z)" },
         { c: T.c5, lab: "φ 合成" },
         { c: T.c2, lab: "粒子" },
-      ], S.W - 118, 46, T);
+      ], S.W - 96, 44, T);
     },
   };
 
@@ -1208,9 +1293,10 @@
     },
     draw(ctx, S, T) {
       banner(ctx, S, T);
+      const uamp = clamp(sl(S, "uamp", 0.45), 0.1, 1.3);
       const W = S.W, H = S.H;
       const cx = W * 0.46, cy = H * 0.58;
-      const scZ = W * 0.22, scL = H * 0.28;
+      const scZ = W * 0.22 * (0.65 + 0.7 * uamp), scL = H * 0.28 * (0.65 + 0.7 * uamp);
 
       // 相空间坐标轴 (z 横轴, lambda 纵轴)
       ctx.strokeStyle = T.dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
@@ -1264,7 +1350,7 @@
       ctx.fillStyle = T.c7;
       ctx.fillText("协态 λ(t) → " + S.metrics["伴随协态 λ"].toFixed(3), gx, gy + 28);
       ctx.fillStyle = T.c3;
-      ctx.fillText("横截条件: lim λ(t)=0", gx, gy + 44);
+      ctx.fillText("控制强度 u = " + uamp.toFixed(2), gx, gy + 44);
 
       if (S.phase === 0) callout(ctx, 30, 68, "阶段 1：构建相空间 (z, λ) 状态-协态对偶坐标", T, T.c7);
       if (S.phase === 1) callout(ctx, 30, 68, "阶段 2：哈密顿向量场引导鞍点双曲流动", T, T.c5);
@@ -1407,12 +1493,11 @@
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const V = view2d(S);
+      const V = view2d(S, [-2.5, 2.5], [-1.7, 1.7], { r: 124 });
       const h = S.sim.h || 0.5;
       const pts = S.sim.pts || [];
       heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
-      modeLabels(ctx, V, T);
       const scQ = (x, y) => { const Q = kdeScore2d(pts, x, y, h); return { x: Q.sx, y: Q.sy }; };
       const scU = (x, y) => { const Q = kdeScore2d(pts, x, y, h); return { x: -Q.sx, y: -Q.sy }; };
       const scF = (x, y) => {
@@ -1428,6 +1513,7 @@
         ctx.font = "12px sans-serif";
         ctx.fillText("Q≈P 时净流≈0", V.x0 + 8, V.y0 + 16);
       }
+      modeLabels(ctx, V, T);
       dots(ctx, pts, V, T.c5, ph === 3 ? 5 : 4);
       if (pts.length) {
         ctx.strokeStyle = rgba(T.c7, 0.5);
@@ -1441,7 +1527,7 @@
         { c: T.c2, lab: "∇log Q" },
         { c: T.c6, lab: "u* = −∇log Q" },
         { c: T.c5, lab: "净 φ" },
-      ], S.W - 140, 46, T);
+      ], S.W - 120, 44, T);
     },
   };
 
@@ -1478,7 +1564,6 @@
       const V = view2d(S, [-2.5, 2.5], [-1.65, 1.65], { r: 124 });
       heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
-      modeLabels(ctx, V, T);
       if (ph === 0) {
         ctx.fillStyle = T.c6;
         ctx.font = "13px sans-serif";
@@ -1499,6 +1584,7 @@
           return { x: P.sx - Q.sx, y: P.sy - Q.sy };
         }, T.c5, 7, 5, ph === 3 ? 7 : 16);
       }
+      modeLabels(ctx, V, T);
       spark(ctx, S.sim.hist, S.W - 126, 44, 108, 46, T.c5, T);
       ctx.fillStyle = T.mu;
       ctx.font = "10px sans-serif";

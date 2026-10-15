@@ -75,6 +75,42 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  function glow(ctx, x, y, r, col) {
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+    ctx.restore();
+  }
+  function banner(ctx, S, T) {
+    const txt = (S.steps && S.steps[S.phase]) || "";
+    font(ctx, 12, false);
+    let t = txt;
+    while (t.length > 4 && ctx.measureText(t).width > S.W - 28) t = t.slice(0, -2);
+    if (t !== txt) t += "…";
+    const w = Math.min(S.W - 16, ctx.measureText(t).width + 18);
+    ctx.fillStyle = T.dark ? "rgba(251,191,36,0.15)" : "rgba(251,191,36,0.32)";
+    rr(ctx, 8, 5, w, 22, 5); ctx.fill();
+    ctx.fillStyle = T.c5;
+    ctx.fillRect(8, 5, 3, 22);
+    ctx.fillStyle = T.tx;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(t, 16, 16);
+  }
+  function callout(ctx, x, y, text, T, col) {
+    font(ctx, 11, false);
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = col || T.c5;
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col || T.tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
+  }
   function txt(ctx, s, x, y, col, px, align, bold) {
     font(ctx, px || 12, !!bold);
     ctx.fillStyle = col;
@@ -114,16 +150,35 @@
     }
   }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
+    ctx.save();
+    font(ctx, 11, false);
+    let totW = 0;
+    items.forEach((it) => {
+      const txt = it.lab || it.l || it.t || "";
+      totW += 16 + ctx.measureText(txt).width + 12;
+    });
+    const boxW = totW + 4;
+    const boxH = 18;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    rr(ctx, x - 4, y - 13, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     let xx = x;
     items.forEach((it) => {
+      const txt = it.lab || it.l || it.t || "";
       ctx.fillStyle = it.c;
-      ctx.beginPath(); ctx.arc(xx + 5, y - 4, 5, 0, TWO); ctx.fill();
+      ctx.beginPath(); ctx.arc(xx + 5, y - 4, 4.5, 0, TWO); ctx.fill();
       font(ctx, 11, false);
       ctx.fillStyle = T.mu;
       ctx.textAlign = "left";
-      ctx.fillText(it.lab, xx + 13, y);
-      xx += 16 + ctx.measureText(it.lab).width + 12;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(txt, xx + 13, y);
+      xx += 16 + ctx.measureText(txt).width + 12;
     });
+    ctx.restore();
   }
   function axes(ctx, x0, y0, x1, y1, T, xl, yl) {
     ctx.strokeStyle = T.line; ctx.lineWidth = 1;
@@ -467,7 +522,7 @@
       }
       if (ph === 0) {
         fillCurve(ctx, xs, pP, mX, mY, T.c5, 0.22);
-        txt(ctx, "条件后验 P(x_m | x_o=" + xobs.toFixed(2) + ")  ρ=" + rho.toFixed(2), 50, 64, T.c5, 12);
+        txt(ctx, "条件后验 P(x_m | x_o=" + xobs.toFixed(2) + ")  ρ=" + rho.toFixed(2), 84, 64, T.c5, 12);
         ctx.strokeStyle = T.c3; ctx.setLineDash([5, 4]); ctx.beginPath();
         ctx.moveTo(mX(xobs), B.y0); ctx.lineTo(mX(xobs), B.y1); ctx.stroke();
         ctx.setLineDash([]);
@@ -476,7 +531,7 @@
         fillCurve(ctx, xs, pP, mX, mY, T.c5, 0.12);
         fillCurve(ctx, xs, pQ, mX, mY, T.c2, 0.25);
         arrow(ctx, mX(mq), mY(gauss(mq, mq, sq)) - 8, mX(mp) - mX(mq), 0, T.c4, 2);
-        legend(ctx, [{ c: T.c5, lab: "后验 P" }, { c: T.c2, lab: "变分 Q  (速率越大贴得越近)" }], 48, 64, T);
+        legend(ctx, [{ c: T.c5, lab: "后验 P" }, { c: T.c2, lab: "变分 Q  (速率越大贴得越近)" }], 84, 64, T);
       } else if (ph === 2) {
         fillCurve(ctx, xs, pP, mX, mY, T.c5, 0.1);
         fillCurve(ctx, xs, pQ, mX, mY, T.c2, 0.18);
@@ -496,7 +551,7 @@
           ctx.fillStyle = hexA(T.c6, 0.9);
           ctx.beginPath(); ctx.arc(mX(clamp(x, -xr, xr)), B.y1 - 7, 3.4, 0, TWO); ctx.fill();
         }
-        txt(ctx, "ρ=" + rho.toFixed(2) + " → 后验几乎平坦，补全值乱飘", 48, 64, T.c6, 12, "left", true);
+        txt(ctx, "ρ=" + rho.toFixed(2) + " → 后验几乎平坦，补全值乱飘", 84, 64, T.c6, 12, "left", true);
       }
       S.metrics.KL = klG(mq, sq, mp, sp);
       S.metrics.后验σ = sp;
@@ -862,7 +917,7 @@
       fillCurve(ctx, xs, p, mX, mY, T.c5, 0.12);
       fillCurve(ctx, xs, q, mX, mY, T.c2, 0.22);
       if (ph === 3) {
-        txt(ctx, "Q 过宽 · 样本飞出", 48, 58, T.c6, 12, "left", true);
+        txt(ctx, "Q 过宽 · 样本飞出", 78, 58, T.c6, 12, "left", true);
       }
       /* 右：零线居中的有符号柱 */
       const Rx = S.W * 0.58, Rw = S.W - Rx - 20, Ry = 58, Rh = S.H - 100;
@@ -954,8 +1009,8 @@
       }
       const L = limpG(mp, sq, mp, sp), H = hG(sq);
       const tag = ph === 0 ? "粒子扩散（+H）" : ph === 1 ? "负熵聚拢（−H）" : ph === 2 ? "得分对准峰" : "又尖又准";
-      txt(ctx, tag, 50, 68, col, 13, "left", true);
-      txt(ctx, "σ_Q=" + sq.toFixed(2) + "  F_NER=" + (L - H).toFixed(2) + "  H=" + H.toFixed(2), 50, 86, T.mu, 11);
+      txt(ctx, tag, 84, 68, col, 13, "left", true);
+      txt(ctx, "σ_Q=" + sq.toFixed(2) + "  F_NER=" + (L - H).toFixed(2) + "  H=" + H.toFixed(2), 84, 86, T.mu, 11);
     },
   });
 
@@ -1054,10 +1109,10 @@
       S.metrics.W2 = Math.sqrt(w2 / ((x0 || []).length || 1));
       S.metrics.ε步长 = tau;
       S.metrics.目标距 = sep;
-      if (ph === 0) txt(ctx, "当前 Q 远离最优点（滑块拉开目标）", 52, 68, T.c2, 12, "left", true);
-      if (ph === 1) txt(ctx, "无邻近项 → 粒子瞬移到星点（过冲）", 52, 68, T.c6, 12, "left", true);
-      if (ph === 2) txt(ctx, "W₂ 球限制每步位移  ε=" + tau.toFixed(2), 52, 68, T.c3, 12, "left", true);
-      if (ph === 3) legend(ctx, [{ c: T.c3, lab: "ε小" }, { c: T.c7, lab: "ε中" }, { c: T.c6, lab: "ε大" }, { c: T.c2, lab: "当前 Q" }], 52, 70, T);
+      if (ph === 0) txt(ctx, "当前 Q 远离最优点（滑块拉开目标）", 76, 68, T.c2, 12, "left", true);
+      if (ph === 1) txt(ctx, "无邻近项 → 粒子瞬移到星点（过冲）", 76, 68, T.c6, 12, "left", true);
+      if (ph === 2) txt(ctx, "W₂ 球限制每步位移  ε=" + tau.toFixed(2), 76, 68, T.c3, 12, "left", true);
+      if (ph === 3) legend(ctx, [{ c: T.c3, lab: "ε小" }, { c: T.c7, lab: "ε中" }, { c: T.c6, lab: "ε大" }, { c: T.c2, lab: "当前 Q" }], 76, 70, T);
     },
   });
   function star(ctx, x, y, r) {
@@ -1214,8 +1269,8 @@
           arrow(ctx, x, y, spx * 16, -spy * 14, T.c5, 1.2, 24);
         }
       });
-      if (ph === 2) legend(ctx, [{ c: T.c5, lab: "∇log p" }, { c: T.c6, lab: "∇log Q" }, { c: T.c4, lab: "合成" }], 44, 68, T);
-      if (ph === 3) txt(ctx, "只剩模型得分 + 噪声：不聚拢，像朗之万", 44, 68, T.c6, 12, "left", true);
+      if (ph === 2) legend(ctx, [{ c: T.c5, lab: "∇log p" }, { c: T.c6, lab: "∇log Q" }, { c: T.c4, lab: "合成" }], 76, 68, T);
+      if (ph === 3) txt(ctx, "只剩模型得分 + 噪声：不聚拢，像朗之万", 76, 68, T.c6, 12, "left", true);
     },
   });
 
@@ -1423,7 +1478,7 @@
           arrow(ctx, mX(p.x), mY(p.y), phi[i].x * 12, -phi[i].y * 10, col, 1.4, 26);
         }
       });
-      if (ph === 2) txt(ctx, "∇log Q 已被核散度项替代", 48, 60, T.c4, 12, "left", true);
+      if (ph === 2) txt(ctx, "∇log Q 已被核散度项替代", 72, 60, T.c4, 12, "left", true);
       if (ph === 3) txt(ctx, "v=" + v.toFixed(2) + "  太大则过平滑，太小则粒子不再交互", 44, S.H - 16, T.tx, 12);
     },
   });
@@ -1473,7 +1528,7 @@
           const gx = 2 * (-x) / v * K, gy = 2 * (-y) / v * K; /* ∇_x K 指向中心 */
           arrow(ctx, mX(x), mY(y), gx * 50, -gy * 44, T.c3, 1.5);
         }
-        txt(ctx, "∇_x K 指向中心（K 随靠近而增大）", 48, 60, T.c3, 12);
+        txt(ctx, "∇_x K 指向中心（K 随靠近而增大）", 72, 60, T.c3, 12);
       }
       S.sim.neigh.forEach((p, i) => {
         const K = Math.exp(-(p.x * p.x + p.y * p.y) / v);
@@ -1674,17 +1729,17 @@
       ctx.strokeStyle = T.c5; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(mX(0), mY(0), 70 * sx, 52 * sy, ph === 0 ? ang : 0, 0, TWO); ctx.stroke();
       if (ph >= 1) {
-        txt(ctx, "ρ=0 轴对齐  Q(xm)p(xo)", 54, 60, T.c3, 12, "left", true);
+        txt(ctx, "ρ=0 轴对齐  Q(xm)p(xo)", 96, 60, T.c3, 12, "left", true);
       }
       if (ph === 2) {
-        txt(ctx, "交叉项 ρ σm σo = " + (rho * sx * sy).toFixed(3) + " → 0", 54, 78, T.c4, 12);
+        txt(ctx, "交叉项 ρ σm σo = " + (rho * sx * sy).toFixed(3) + " → 0", 96, 78, T.c4, 12);
       }
       if (ph === 3) {
         for (let k = 0; k < 8; k++) {
           const y = -1.1 + 2.2 * k / 7;
           arrow(ctx, mX(-0.3), mY(y), 28, 0, T.c6, 1.5);
         }
-        txt(ctx, "p(x_o) 不参与优化，位移只沿缺失轴", 54, 60, T.c6, 12, "left", true);
+        txt(ctx, "p(x_o) 不参与优化，位移只沿缺失轴", 96, 60, T.c6, 12, "left", true);
       }
     },
   });

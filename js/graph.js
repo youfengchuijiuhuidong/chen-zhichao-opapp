@@ -245,6 +245,22 @@
     let raf = 0;
     let breatheRaf = 0;
 
+    let fluidEnabled = true;
+    try {
+      const savedFluid = localStorage.getItem("op-graph-fluid");
+      if (savedFluid !== null) fluidEnabled = savedFluid === "1";
+    } catch (e) {}
+
+    let driftX = 0, driftY = 0;
+    let targetDriftX = 0, targetDriftY = 0;
+    let isDragging = false;
+    let mouseInside = false;
+    let mouseCanvasX = -9999, mouseCanvasY = -9999;
+    let mouseWorldX = -9999, mouseWorldY = -9999;
+    let activeLensNodes = new Set();
+    let fluidRaf = 0;
+    let lastHoveredOpId = null;
+
     function markDirty() {
       dirty = true;
       if (!raf) raf = requestAnimationFrame(flush);
@@ -253,11 +269,159 @@
       raf = 0;
       if (!dirty) return;
       dirty = false;
-      vp.setAttribute("transform", `translate(${vx},${vy}) scale(${sc})`);
+      const renderVx = vx + driftX;
+      const renderVy = vy + driftY;
+      vp.setAttribute("transform", `translate(${renderVx.toFixed(2)},${renderVy.toFixed(2)}) scale(${sc.toFixed(4)})`);
     }
 
     function saveNow() {
       writeVP({ panX: vx, panY: vy, scale: sc, lastOpId: lastOpId });
+    }
+
+    function calcParallax(u, maxVal) {
+      const deadZone = 0.14;
+      const abs = Math.abs(u);
+      if (abs <= deadZone) return 0;
+      const sign = Math.sign(u);
+      const scaled = Math.min(1, (abs - deadZone) / (1 - deadZone));
+      const eased = scaled * scaled * (3 - 2 * scaled);
+      return -sign * eased * maxVal;
+    }
+
+    function updateLens() {
+      if (!fluidEnabled || !mouseInside || isDragging) {
+        resetLensNodes();
+        return;
+      }
+      const R_SCREEN = 140;
+      const currentNodes = new Set();
+      const hasSearchOrCh = (searchIds && searchIds.length) || !!chFilter;
+      
+      let closestNode = null;
+      let minDistance = Infinity;
+
+      const renderVx = vx + driftX;
+      const renderVy = vy + driftY;
+
+      const minWorldX = (mouseCanvasX - R_SCREEN - renderVx) / sc;
+      const maxWorldX = (mouseCanvasX + R_SCREEN - renderVx) / sc;
+
+      const approxColStart = Math.max(0, Math.floor((minWorldX - 36) / 292));
+      const approxColEnd = Math.min(L.cols.length - 1, Math.floor((maxWorldX - 36) / 292) + 1);
+
+      const maxBoost = sc < 0.42 ? 0.36 : (sc < 0.75 ? 0.25 : 0.18);
+
+      for (let c = approxColStart; c <= approxColEnd; c++) {
+        const colNodes = L.cols[c];
+        if (!colNodes) continue;
+        for (let i = 0; i < colNodes.length; i++) {
+          const o = colNodes[i];
+          if (hasSearchOrCh && o.g.classList.contains("dim")) continue;
+
+          const nScreenX = (o.x + L.NW / 2) * sc + renderVx;
+          const nScreenY = (o.y + L.NH / 2) * sc + renderVy;
+          const dist = Math.hypot(nScreenX - mouseCanvasX, nScreenY - mouseCanvasY);
+
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestNode = o;
+          }
+
+          if (dist < R_SCREEN) {
+            currentNodes.add(o);
+            const normDist = dist / R_SCREEN;
+            const w = 0.5 * (1 + Math.cos(Math.PI * normDist));
+            const s = 1.0 + maxBoost * w;
+            const tx = o.x - (s - 1) * L.NW / 2;
+            const ty = o.y - (s - 1) * L.NH / 2;
+            
+            o.g.setAttribute("transform", `translate(${tx.toFixed(2)},${ty.toFixed(2)}) scale(${s.toFixed(3)})`);
+            if (dist < 60) {
+              o.g.style.filter = "drop-shadow(0 6px 16px rgba(91,140,255,0.48))";
+            } else {
+              o.g.style.filter = "drop-shadow(0 2px 8px rgba(0,0,0,0.25))";
+            }
+          }
+        }
+      }
+
+      activeLensNodes.forEach((o) => {
+        if (!currentNodes.has(o)) {
+          o.g.setAttribute("transform", `translate(${o.x},${o.y})`);
+          o.g.style.filter = "";
+        }
+      });
+      activeLensNodes = currentNodes;
+
+      if (closestNode && minDistance < 65 && !hasSearchOrCh) {
+        if (lastHoveredOpId !== closestNode.id) {
+          lastHoveredOpId = closestNode.id;
+          highlight(closestNode.id);
+        }
+      } else if (lastHoveredOpId && !hasSearchOrCh && (!closestNode || minDistance >= 80)) {
+        lastHoveredOpId = null;
+        applySpotlight();
+      }
+    }
+
+    function resetLensNodes() {
+      if (!activeLensNodes.size) return;
+      activeLensNodes.forEach((o) => {
+        o.g.setAttribute("transform", `translate(${o.x},${o.y})`);
+        o.g.style.filter = "";
+      });
+      activeLensNodes.clear();
+      if (lastHoveredOpId && !searchIds && !chFilter) {
+        lastHoveredOpId = null;
+        applySpotlight();
+      }
+    }
+
+    function fluidTick() {
+      let needNext = false;
+
+      if (fluidEnabled) {
+        const diffX = targetDriftX - driftX;
+        const diffY = targetDriftY - driftY;
+        if (Math.abs(diffX) > 0.05 || Math.abs(diffY) > 0.05) {
+          driftX += diffX * 0.09;
+          driftY += diffY * 0.09;
+          markDirty();
+          needNext = true;
+        } else {
+          driftX = targetDriftX;
+          driftY = targetDriftY;
+        }
+
+        updateLens();
+
+        if (mouseInside || activeLensNodes.size > 0 || needNext) {
+          needNext = true;
+        }
+      } else {
+        if (Math.abs(driftX) > 0.05 || Math.abs(driftY) > 0.05) {
+          driftX += (0 - driftX) * 0.12;
+          driftY += (0 - driftY) * 0.12;
+          markDirty();
+          needNext = true;
+        } else {
+          driftX = 0;
+          driftY = 0;
+        }
+        resetLensNodes();
+      }
+
+      if (needNext) {
+        fluidRaf = requestAnimationFrame(fluidTick);
+      } else {
+        fluidRaf = 0;
+      }
+    }
+
+    function startFluidLoop() {
+      if (!fluidRaf) {
+        fluidRaf = requestAnimationFrame(fluidTick);
+      }
     }
 
     function applySpotlight() {
@@ -324,6 +488,7 @@
       sc = clamp(Math.min(r.width / bw, r.height / bh) * 0.94, 0.22, 2.4);
       vx = r.width / 2 - sc * ((minX + maxX) / 2);
       vy = r.height / 2 - sc * ((minY + maxY) / 2);
+      targetDriftX = 0; targetDriftY = 0; driftX = 0; driftY = 0;
       userVp = true;
       markDirty();
     }
@@ -351,19 +516,52 @@
     let drag = null;
     svg.addEventListener("pointerdown", (e) => {
       if (e.target.closest && e.target.closest(".node")) return;
+      isDragging = true;
+      targetDriftX = 0;
+      targetDriftY = 0;
       drag = { x: e.clientX, y: e.clientY, vx, vy };
       svg.setPointerCapture(e.pointerId);
     });
     svg.addEventListener("pointermove", (e) => {
-      if (!drag) return;
-      vx = drag.vx + (e.clientX - drag.x);
-      vy = drag.vy + (e.clientY - drag.y);
-      userVp = true;
-      markDirty();
+      if (drag) {
+        vx = drag.vx + (e.clientX - drag.x);
+        vy = drag.vy + (e.clientY - drag.y);
+        userVp = true;
+        markDirty();
+        return;
+      }
+      mouseInside = true;
+      const r = svg.getBoundingClientRect();
+      if (r.width < 10 || r.height < 10) return;
+      mouseCanvasX = e.clientX - r.left;
+      mouseCanvasY = e.clientY - r.top;
+
+      if (fluidEnabled) {
+        const normX = ((mouseCanvasX - r.width / 2) / (r.width / 2));
+        const normY = ((mouseCanvasY - r.height / 2) / (r.height / 2));
+        targetDriftX = calcParallax(normX, Math.min(150, r.width * 0.18));
+        targetDriftY = calcParallax(normY, Math.min(75, r.height * 0.14));
+
+        const renderVx = vx + driftX;
+        const renderVy = vy + driftY;
+        mouseWorldX = (mouseCanvasX - renderVx) / sc;
+        mouseWorldY = (mouseCanvasY - renderVy) / sc;
+
+        startFluidLoop();
+      }
+    });
+    svg.addEventListener("pointerleave", () => {
+      mouseInside = false;
+      targetDriftX = 0;
+      targetDriftY = 0;
+      startFluidLoop();
+      if (!pinned && !searchIds && !chFilter) applySpotlight();
     });
     svg.addEventListener("pointerup", () => {
       if (drag) saveNow();
       drag = null;
+      isDragging = false;
+      startFluidLoop();
     });
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -371,8 +569,12 @@
       const nsc = clamp(sc * k, 0.22, 2.4);
       const r = svg.getBoundingClientRect();
       const px = e.clientX - r.left, py = e.clientY - r.top;
-      vx = px - (px - vx) * (nsc / sc);
-      vy = py - (py - vy) * (nsc / sc);
+      const renderVx = vx + driftX;
+      const renderVy = vy + driftY;
+      const gx = (px - renderVx) / sc;
+      const gy = (py - renderVy) / sc;
+      vx = px - gx * nsc - driftX;
+      vy = py - gy * nsc - driftY;
       sc = nsc;
       userVp = true;
       markDirty();
@@ -387,7 +589,9 @@
       if (w < 8 || h < 8) return false;
       sc = Math.min(w / L.width, h / L.height) * 0.92;
       vx = 10; vy = 8;
+      targetDriftX = 0; targetDriftY = 0; driftX = 0; driftY = 0;
       userVp = false;
+      resetLensNodes();
       markDirty();
       saveNow();
       return true;
@@ -440,6 +644,13 @@
       });
     }
 
+    function setFluid(enabled) {
+      fluidEnabled = !!enabled;
+      try { localStorage.setItem("op-graph-fluid", fluidEnabled ? "1" : "0"); } catch (e) {}
+      startFluidLoop();
+      return fluidEnabled;
+    }
+
     const api = {
       select: highlight,
       highlight,
@@ -451,12 +662,15 @@
       getViewport() { return { panX: vx, panY: vy, scale: sc, lastOpId }; },
       rememberOp(id) { lastOpId = id; saveNow(); },
       breathe,
+      setFluid,
+      isFluid() { return fluidEnabled; },
       destroy() {
         saveNow();
         window.removeEventListener("resize", onResize);
         if (roFit) roFit.disconnect();
         if (raf) cancelAnimationFrame(raf);
         if (breatheRaf) cancelAnimationFrame(breatheRaf);
+        if (fluidRaf) cancelAnimationFrame(fluidRaf);
       },
     };
     return api;

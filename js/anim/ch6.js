@@ -32,8 +32,49 @@
   function on(ph, i) {
     return ph === i ? 1 : 0;
   }
-  function glow(ph, i) {
-    return ph === i ? 1 : 0.28;
+  function glow(a, b, c, d, e) {
+    if (arguments.length >= 4) {
+      const ctx = a, x = b, y = c, r = d, clr = e;
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = clr;
+      ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TWO); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TWO); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    return a === b ? 1 : 0.28;
+  }
+  function mulberry(seed) {
+    let s = (seed || 1) | 0;
+    return function () {
+      s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.min(r || 6, Math.abs(w) / 2, Math.abs(h) / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function callout(ctx, x, y, text, T, clr) {
+    ctx.font = FONTSM;
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = T.dark ? "rgba(7,13,24,0.72)" : "rgba(255,255,255,0.82)";
+    rr(ctx, x, y - 12, w, 16, 4); ctx.fill();
+    ctx.strokeStyle = clr || T.c5;
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = clr || T.tx;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 5, y - 4);
   }
 
   function col(c, a) {
@@ -106,6 +147,7 @@
     ctx.textAlign = "left";
   }
   function banner(ctx, S, T, ph) {
+    if (ph == null) ph = (S && S.phase != null) ? S.phase : 0;
     const n = (S.steps && S.steps.length) || 1;
     const msg = (S.steps && S.steps[ph]) || "";
     ctx.font = FONTB;
@@ -117,15 +159,33 @@
     ctx.fillText(ph + 1 + "/" + n + "  " + msg, 14, 22);
   }
   function legend(ctx, items, x, y, T) {
+    if (!items || !items.length) return;
+    ctx.save();
     ctx.font = FONTSM;
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    let maxW = 0;
+    items.forEach((it) => {
+      const txt = it.t || it.lab || it.l || "";
+      const w = ctx.measureText(txt).width;
+      if (w > maxW) maxW = w;
+    });
+    const boxW = maxW + 24;
+    const boxH = items.length * 15 + 6;
+    ctx.fillStyle = T.dark ? "rgba(11, 18, 32, 0.85)" : "rgba(255, 255, 255, 0.88)";
+    rr(ctx, x - 5, y - 4, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = T.line;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       ctx.fillStyle = it.c;
       ctx.fillRect(x, y + i * 15, 10, 10);
       ctx.fillStyle = T.tx;
-      ctx.fillText(it.t, x + 14, y + i * 15 + 10);
+      ctx.fillText(it.t || it.lab || it.l || "", x + 14, y + i * 15 + 10);
     }
+    ctx.restore();
   }
   function arrow(ctx, x0, y0, x1, y1, color, lw) {
     const dx = x1 - x0, dy = y1 - y0, L = hypot(dx, dy);
@@ -740,7 +800,7 @@
 
       // Point at scanner
       glow(ctx, scanX, y0, 5, T.c3);
-      ctx.fillStyle = T.c5; ctx.font = "10px " + FONT; ctx.textAlign = "center";
+      ctx.fillStyle = T.c5; ctx.font = FONTSM; ctx.textAlign = "center";
       ctx.fillText("时刻 t 截面", scanX, y0 - spanY - 16);
 
       // Dashboard
@@ -1059,15 +1119,31 @@
       ctx.font = FONTB;
       const gap = r.Jloc - r.bestG;
       if (ph >= 2) {
+        ctx.font = FONTB;
+        const t1 = "全局 min J = " + r.bestG.toFixed(3);
+        const w1 = ctx.measureText(t1).width;
         ctx.fillStyle = T.c5;
-        ctx.fillText("全局 min J = " + r.bestG.toFixed(3), 16, S.H - 30);
+        ctx.fillText(t1, 16, S.H - 30);
         ctx.fillStyle = T.c3;
-        ctx.fillText("Σ 局部 min = " + r.Jloc.toFixed(3) + "  ≥  全局  (间隙 " + gap.toFixed(3) + ")", 220, S.H - 30);
+        const x2 = Math.max(200, 16 + w1 + 16);
+        const t2 = S.W < 540
+          ? "Σ 局部 = " + r.Jloc.toFixed(3) + " (间隙 " + gap.toFixed(3) + ")"
+          : "Σ 局部 min = " + r.Jloc.toFixed(3) + "  ≥  全局  (间隙 " + gap.toFixed(3) + ")";
+        ctx.fillText(t2, x2, S.H - 30);
       }
       if (ph === 3) {
-        ctx.fillStyle = T.c7;
         ctx.font = FONTSM;
-        ctx.fillText("在线软测量不能偷看未来 y：只能走黄/青绿的单步前瞻。", 16, 54);
+        const msg = "在线软测量不能偷看未来 y：只能走黄/青绿的单步前瞻。";
+        const mw = ctx.measureText(msg).width;
+        ctx.fillStyle = T.dark ? "rgba(7,13,24,0.85)" : "rgba(255,255,255,0.9)";
+        rr(ctx, 12, 42, mw + 10, 20, 4);
+        ctx.fill();
+        ctx.strokeStyle = T.line;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = T.c7;
+        ctx.textAlign = "left";
+        ctx.fillText(msg, 17, 56);
       }
       // 底栏折线：虚线全局 z(t) vs 实线局部
       if (r.bestZ && r.locZ) {
