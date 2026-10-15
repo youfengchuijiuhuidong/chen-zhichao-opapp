@@ -4,10 +4,17 @@
 
 基于最新 UX 版本（commit 3157f1b），针对全量 127 算子深度学术审计成果进行全维落地升级：
 
-### 一、动画与几何教学重构 (P0)
-- **沃瑟斯坦空间 P2 (`wasserstein_space_p2`) 彻底重构**：告别原版两点搬运测距的张冠李戴，重构为**「微观视窗（状态空间粒子云 Q） ↔ 宏观视窗（奥托无穷维黎曼流形 P2 质点与测地线滑动）」**的双重视角同屏映射。
-- **二阶矩有限性入场券监控**：画布增加 $\mathbb{E}_Q[\|z\|^2]$ 动态能级监控与流形边界状态指示，粒子逃逸/发散时即时触发移出流形预警。
-- **切空间几何可视化**：绘制切空间平面 $T_Q \mathcal{P}_2$ 与切向量（对应连续性方程速度场 $\phi$）。
+### 一、动画与几何教学重构 (P0，Top 10 核心难点算子全量落地)
+- **沃瑟斯坦空间 P2 (`wasserstein_space_p2`)**：重构为「微观状态空间粒子云 Q ↔ 宏观奥托无穷维黎曼流形 P2 质点滑动」双重视角，增加二阶矩入场券能级预警与切空间平面 $T_Q \mathcal{P}_2$。
+- **Bregman 散度 (`bregman_divergence`)**：重构为严格凸势函数上的非对称双切平面测距标尺，实时量测并对比 $B(q\|p) \ne B(p\|q)$。
+- **负熵泛函 (`entropy_functional`)**：重构为双势阱中“观测重构外力收拢” vs “负熵梯度场排斥扩散”的双力动态平衡。
+- **粒子经验量化 (`particle_quantization`)**：重构为连续多峰光滑密度向 Dirac $\delta$ 离散脉冲逼近的极限收敛过程，实时展示 $\mathcal{O}(1/\sqrt{N})$ 蒙特卡洛方差衰减。
+- **无穷时域哈密顿系统 (`hamiltonian_infinite_horizon`)**：重构为相空间 $(z, \lambda)$ 鞍点双曲流动轨迹，直观展示横截条件 $\lim_{t \to \infty} \lambda(t) = 0$ 协态渐近衰减。
+- **KEMS 镜像单纯形更新 (`kems_simplex_update`)**：绘制概率单纯形 $\Delta^3$ 三角形，展示对偶空间无约束步经 Softmax 镜像映射回投影，永不逃出单纯形边界。
+- **Girsanov 测度变换 (`girsanov_density_ratio`)**：同屏对比无漂移布朗参考路径与漂移受控路径，通过光晕粗细动态可视化 Radon-Nikodym 导数权重。
+- **路径边际 KL 不等式 (`path_marginal_kl_inequality`)**：绘制时空演化管状带，通过时间切片扫描仪动态印证 $D_{KL}[Q_t \| P_t] \le D_{KL}^{\text{path}}[Q \| P]$ 处处成立。
+- **Fisher-Rao 流形演化 (`fisher_rao_manifold_evolution`)**：对比上轨 Wasserstein 物理搬迁与下轨 Fisher-Rao 本地就地消解与远端重组（Teleportation），展现突变工况跳跃。
+- **Stein 路径对齐 (`stein_path_alignment`)**：呈现工业软测量冷启动工况下的源域向目标域迁移，绘制核互斥力与得分牵引力向量场。
 
 ### 二、公式符号与画布联动全面铺开 (P0)
 - `js/hover-map.js` 扩展新增 $\mathcal{P}_2$、$\mathbb{E}_Q$、哈密顿量 $H$、Bregman势 $\Psi$、单纯形 $\Delta$、SDE漂移项 $f$、ADMM罚参数 $\rho$、再生核 $K$ 等核心数学符号。

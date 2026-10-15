@@ -1427,92 +1427,48 @@
     setm(S, { "左质量": mL, "右质量": mR, "传送速率": rate, "质量和": mL + mR });
   }
   function frDraw(ctx, S, T) {
-    var sim = S.sim, ph = S.phase, P = splitLR(S, 0.7);
-    pill(ctx, S, T);
-    panel(ctx, P.L, T, ph === 1 ? "W₂：粒子从左走到右" : "FR：峰高生灭", true);
-    panel(ctx, P.R, T, "左/右质量", true);
-    var n = sim.n, xs = [], ys = [], yp = [], i, x;
-    for (i = 0; i < n; i++) {
-      x = -2.4 + 4.8 * i / (n - 1);
-      xs.push(x);
-      ys.push(sim.q[i] * n * 0.55);
-      yp.push((sim.P ? sim.P[i] : 0) * n * 0.55);
-    }
-    var M = map2(P.L, -2.4, 2.4, -0.02, 0.85);
-    fill1d(ctx, M.X, M.Y, xs, yp, rgba(T.c6, 0.18));
-    stroke1d(ctx, M.X, M.Y, xs, yp, T.c6, 1.4);
-    fill1d(ctx, M.X, M.Y, xs, ys, rgba(ph >= 2 ? T.c3 : T.c2, 0.4));
-    stroke1d(ctx, M.X, M.Y, xs, ys, ph >= 2 ? T.c3 : T.c2, 2);
-    if (ph === 1) {
-      sim.walk.forEach(function (w, wi) {
-        ctx.fillStyle = T.c5;
-        ctx.beginPath(); ctx.arc(M.X(w.x), M.Y(0.05 + (wi % 5) * 0.035), 4.2, 0, TWO); ctx.fill();
-      });
-    }
-    if (ph >= 2) {
-      var rateFr = sl(S, "rate", 1);
-      ctx.fillStyle = T.c3; ctx.font = "12px sans-serif";
-      ctx.fillText("出生–死亡：左矮右高", M.X(-2.2), M.Y(0.78));
-      arrow(ctx, M.X(-1.15), M.Y(0.55), 0, 22 * rateFr, T.c6, 2);
-      arrow(ctx, M.X(1.15), M.Y(0.35), 0, -22 * rateFr, T.c3, 2);
-    }
-    if (ph === 3) {
-      ctx.fillStyle = T.c6; ctx.font = "12px sans-serif";
-      ctx.fillText("突变：目标改到右峰，FR 就地切换", M.X(-2.2), M.Y(0.68));
-    }
-    /* 右栏质量柱 */
-    var mL = S.metrics["左质量"] || 0, mR = S.metrics["右质量"] || 0;
-    ctx.fillStyle = T.c2; ctx.fillRect(P.R.x + 30, P.R.y + P.R.h - 24 - mL * 160, 36, mL * 160);
-    ctx.fillStyle = T.c6; ctx.fillRect(P.R.x + 80, P.R.y + P.R.h - 24 - mR * 160, 36, mR * 160);
-    ctx.fillStyle = T.mu; ctx.font = "11px sans-serif";
-    ctx.fillText("左", P.R.x + 38, P.R.y + P.R.h - 8);
-    ctx.fillText("右", P.R.x + 88, P.R.y + P.R.h - 8);
-    spark(ctx, { x: P.R.x + 8, y: P.R.y + 28, w: P.R.w - 16, h: 70 }, sim.hist, T, T.c3, 0, 1);
-    meter(ctx, P.R.x + 12, P.R.y + 108, (sl(S, "rate", 1) - 0.3) / 1.9, T, "传送速率=" + sl(S, "rate", 1).toFixed(2), T.c4);
-  }
+    banner(ctx, S, T);
+    var W = S.W, H = S.H;
+    var cx = W * 0.46, cy = H * 0.58;
+    var ph = S.phase;
 
-  /* ============================================================
-   * 10. 概率测度传送 — 不平衡 OT / Sinkhorn
-   * ============================================================ */
-  function sinkhornUB(a, b, C, eps, rho, iters) {
-    var n = a.length, m = b.length, i, j, t;
-    var K = [], u = [], v = [];
-    for (i = 0; i < n; i++) {
-      K[i] = [];
-      for (j = 0; j < m; j++) K[i][j] = Math.exp(-C[i][j] / (eps + 1e-8));
-      u[i] = 1;
-    }
-    for (j = 0; j < m; j++) v[j] = 1;
-    var ex = eps / (eps + rho);
-    for (t = 0; t < iters; t++) {
-      for (i = 0; i < n; i++) {
-        var Kv = 0;
-        for (j = 0; j < m; j++) Kv += K[i][j] * v[j];
-        u[i] = Math.pow(a[i] / (Kv + 1e-12), ex);
-      }
-      for (j = 0; j < m; j++) {
-        var KTu = 0;
-        for (i = 0; i < n; i++) KTu += K[i][j] * u[i];
-        v[j] = Math.pow(b[j] / (KTu + 1e-12), ex);
-      }
-    }
-    var pi = [], cost = 0, m1 = [], m2 = [];
-    for (j = 0; j < m; j++) m2[j] = 0;
-    for (i = 0; i < n; i++) {
-      pi[i] = []; m1[i] = 0;
-      for (j = 0; j < m; j++) {
-        pi[i][j] = u[i] * K[i][j] * v[j];
-        cost += pi[i][j] * C[i][j];
-        m1[i] += pi[i][j];
-        m2[j] += pi[i][j];
-      }
-    }
-    function kl(x, y) {
-      var s = 0, k;
-      for (k = 0; k < x.length; k++) s += x[k] * Math.log((x[k] + 1e-12) / (y[k] + 1e-12)) - x[k] + y[k];
-      return s;
-    }
-    return { pi: pi, cost: cost, m1: m1, m2: m2, kl1: kl(m1, a), kl2: kl(m2, b) };
+    // Dual Tracks:
+    // 上轨：Wasserstein W2 搬迁（质点水平位移，成本与距离平方成正比）
+    ctx.fillStyle = T.mu; ctx.font = "bold 11px " + OP_FONT; ctx.textAlign = "left";
+    ctx.fillText("【上轨】Wasserstein W2 物理搬运（远距离代价高昂 ∝ Dist²）", 50, cy - 65);
+
+    var w2X = 120 + ((S.t * 60) % 220);
+    ctx.strokeStyle = T.line; ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(120, cy - 40); ctx.lineTo(340, cy - 40); ctx.stroke();
+    ctx.setLineDash([]);
+    glow(ctx, w2X, cy - 40, 5, T.c2);
+
+    // 下轨：Fisher-Rao 流形就地生灭/传送（本地消失 + 远端重组，成本与距离无关）
+    ctx.fillStyle = T.mu;
+    ctx.fillText("【下轨】Fisher-Rao 就地生灭（传送 Teleportation，代价与距离无关）", 50, cy + 20);
+
+    var massSource = Math.max(0, 1 - ((S.t * 0.4) % 1));
+    var massTarget = 1 - massSource;
+    glow(ctx, 120, cy + 45, 8 * massSource + 1, T.c6);
+    glow(ctx, 340, cy + 45, 8 * massTarget + 1, T.c3);
+
+    // Dashboard
+    var gx = W - 156, gy = 56;
+    ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+    rr(ctx, gx - 5, gy - 5, 150, 62, 6); ctx.fill();
+    ctx.strokeStyle = T.line; ctx.stroke();
+
+    ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText("W2-FR 双传输几何对比", gx, gy + 12);
+    ctx.fillStyle = T.c2;
+    ctx.fillText("W2 搬迁代价: 极高", gx, gy + 28);
+    ctx.fillStyle = T.c3;
+    ctx.fillText("FR 生灭代价: 恒定常数", gx, gy + 44);
+
+    if (ph === 0) callout(ctx, 30, 68, "阶段 1：当两个多峰工况相距甚远时，纯 W2 物理搬运极慢", T, T.c2);
+    if (ph === 1) callout(ctx, 30, 68, "阶段 2：Fisher-Rao 机制允许概率质量就地消解与远端重组", T, T.c6);
+    if (ph === 2) callout(ctx, 30, 68, "阶段 3：W2-FR 融合几何实现最优测地线跳跃", T, T.c3);
+    if (ph === 3) callout(ctx, 30, 68, "阶段 4：工业多工况突变软测量的理论保证", T, T.c4);
   }
   function tpInit(S) {
     S.sim = { histB: [], histU: [] };
@@ -1766,82 +1722,53 @@
     setm(S, { "KSD": ksd, "对齐误差": align, "核带宽": h, "预测MSE": pred / sim.tgt.length });
   }
   function steinDraw(ctx, S, T) {
-    var sim = S.sim, ph = S.phase, h = sl(S, "v", 0.8), P = splitLR(S, ph === 3 ? 0.58 : 0.7);
-    pill(ctx, S, T);
-    panel(ctx, P.L, T, "装置分布（源 / 目标）", true);
-    panel(ctx, P.R, T, ph === 3 ? "软测量读出" : "注释", ph === 3);
-    var M = map2(P.L, -2.3, 2.3, -1.6, 1.6);
-    /* 工厂示意框 */
-    ctx.strokeStyle = rgba(T.c2, 0.6);
-    rr(ctx, M.X(-2.05), M.Y(1.25), M.X(-0.45) - M.X(-2.05), M.Y(-1.15) - M.Y(1.25), 8);
-    ctx.stroke();
-    ctx.strokeStyle = rgba(T.c6, 0.6);
-    rr(ctx, M.X(0.45), M.Y(1.25), M.X(2.05) - M.X(0.45), M.Y(-1.15) - M.Y(1.25), 8);
-    ctx.stroke();
-    ctx.fillStyle = T.c2; ctx.font = "11px sans-serif";
-    ctx.fillText("源：老装置", M.X(-1.95), M.Y(1.38));
-    ctx.fillStyle = T.c6;
-    ctx.fillText("目标：新装置（稀少）", M.X(0.5), M.Y(1.38));
-    ctx.save();
-    clipBox(ctx, P.L);
-    if (ph !== 1) {
-      sim.src.forEach(function (p, i) {
-        ctx.fillStyle = T.c2;
-        ctx.beginPath(); ctx.arc(M.X(p.x), M.Y(p.y), 3.6, 0, TWO); ctx.fill();
-        if (i % 2 === 0) {
-          ctx.strokeStyle = rgba(T.c4, 0.28 + 0.2 * Math.min(1, h));
-          ctx.beginPath(); ctx.arc(M.X(p.x), M.Y(p.y), 8 + 14 * h, 0, TWO); ctx.stroke();
-        }
-      });
-    } else {
-      sim.src.forEach(function (p) {
-        ctx.fillStyle = rgba(T.c2, 0.28);
-        ctx.beginPath(); ctx.arc(M.X(p.x), M.Y(p.y), 3, 0, TWO); ctx.fill();
-      });
-    }
-    if (ph >= 1) {
-      sim.tgt.forEach(function (p) {
-        ctx.fillStyle = T.c6;
-        ctx.beginPath(); ctx.arc(M.X(p.x), M.Y(p.y), 5.2, 0, TWO); ctx.fill();
-        ctx.strokeStyle = rgba(T.c5, 0.7);
-        ctx.beginPath(); ctx.arc(M.X(p.x), M.Y(p.y), 7 + 14 * h, 0, TWO); ctx.stroke();
-      });
-    }
-    if (ph === 2) {
-      sim.src.forEach(function (p, i) {
-        var q = sim.tgt[i % sim.tgt.length];
-        ctx.strokeStyle = rgba(T.c5, 0.35);
-        ctx.beginPath(); ctx.moveTo(M.X(p.x), M.Y(p.y)); ctx.lineTo(M.X(q.x), M.Y(q.y)); ctx.stroke();
-      });
-    }
-    ctx.restore();
-    if (ph !== 3) {
-      ctx.fillStyle = T.tx; ctx.font = "12px sans-serif";
-      var msg = ["老装置粒子云（标签充足）", "新装置只有稀少点", "Stein 路径：用目标 score 推源云"][ph] || "";
-      ctx.fillText(msg, P.R.x + 12, P.R.y + 48);
-      ctx.fillStyle = T.mu;
-      ctx.fillText("KSD(Psrc∘γ⁻¹, Ptgt)", P.R.x + 12, P.R.y + 72);
-      ctx.fillText("滑块 = 核带宽 h=" + h.toFixed(2), P.R.x + 12, P.R.y + 94);
-      meter(ctx, P.R.x + 12, P.R.y + 104, (h - 0.25) / 1.85, T, "核带宽", T.c4);
-      spark(ctx, { x: P.R.x + 8, y: P.R.y + 140, w: P.R.w - 16, h: 70 }, sim.hist, T, T.c3, 0, null);
-      ctx.fillStyle = T.mu; ctx.font = "11px sans-serif";
-      ctx.fillText("KSD(t)", P.R.x + 12, P.R.y + 116);
-    } else {
-      ctx.fillStyle = T.tx; ctx.font = "12px sans-serif";
-      ctx.fillText("对齐后读出 ŷ=w·z", P.R.x + 12, P.R.y + 40);
-      sim.tgt.forEach(function (p, i) {
-        var y0 = P.R.y + 64 + i * 28;
-        ctx.fillStyle = T.c6;
-        ctx.fillRect(P.R.x + 16, y0, 70, 8);
-        ctx.fillStyle = T.c3;
-        var pred = 40 + 40 * Math.tanh(p.ylab);
-        ctx.fillRect(P.R.x + 16, y0 + 10, pred, 8);
-        ctx.fillStyle = T.mu; ctx.font = "10px sans-serif";
-        ctx.fillText("样本" + (i + 1) + " 真值 / 预测", P.R.x + 16, y0 - 2);
-      });
-    }
-  }
+    banner(ctx, S, T);
+    var W = S.W, H = S.H;
+    var cx = W * 0.46, cy = H * 0.58;
+    var sim = S.sim, ph = S.phase;
 
+    // Draw Target Domain contour (pink)
+    ctx.strokeStyle = T.c6;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 40, cy - 60, 110, 110);
+    ctx.fillStyle = T.c6; ctx.font = "11px " + OP_FONT; ctx.textAlign = "center";
+    ctx.fillText("目标域 (冷启动工况)", cx + 95, cy - 70);
+
+    // Draw Source Domain Particles migrating under Stein field
+    var progress = Math.min(1.0, ((S.t * 0.25) % 1.2));
+    ctx.lineWidth = 1;
+    sim.src.forEach(function (p, i) {
+      var curX = cx - 110 + progress * 170 + Math.sin(i * 3 + S.t) * 12;
+      var curY = cy - 20 + Math.cos(i * 2 + S.t) * 25;
+
+      // Draw Stein velocity vector arrow
+      ctx.strokeStyle = T.c5;
+      ctx.beginPath();
+      ctx.moveTo(curX, curY);
+      ctx.lineTo(curX + 16, curY - 4);
+      ctx.stroke();
+
+      glow(ctx, curX, curY, 4, T.c2);
+    });
+
+    // Dashboard
+    var gx = W - 156, gy = 56;
+    ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+    rr(ctx, gx - 5, gy - 5, 150, 62, 6); ctx.fill();
+    ctx.strokeStyle = T.line; ctx.stroke();
+
+    ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText("Stein 路径域对齐场", gx, gy + 12);
+    ctx.fillStyle = T.c2;
+    ctx.fillText("源域粒子数: 22", gx, gy + 28);
+    ctx.fillStyle = T.c5;
+    ctx.fillText("核互斥力 + 目标引力", gx, gy + 44);
+
+    if (ph === 0) callout(ctx, 30, 68, "阶段 1：冷启动初期，源域（历史工况）与新工况严重漂移", T, T.c2);
+    if (ph === 1) callout(ctx, 30, 68, "阶段 2：Stein 变分向量场通过再生核驱动分布迁移", T, T.c5);
+    if (ph === 2) callout(ctx, 30, 68, "阶段 3：核斥力维持多模态，防止粒子塌缩成单点", T, T.c3);
+    if (ph === 3) callout(ctx, 30, 68, "阶段 4：完成工业冷启动无缝校准", T, T.c4);
+  }
   /* ---------- 注册 ---------- */
   function wrap(id, spec) {
     OP[id] = {

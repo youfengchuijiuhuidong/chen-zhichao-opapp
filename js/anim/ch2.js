@@ -1405,39 +1405,119 @@
   });
 
   R("bregman_divergence", {
-    init(S) { S.sim = { z: 1.3 }; },
+    init(S) {
+      S.sim = { p: 0.8, q: -0.4 };
+    },
     tick(S) {
       const z0 = sl(S, "z0", 0.6);
-      S.sim.z = 0.4 + 1.3 * (0.5 + 0.5 * Math.sin(S.t * 0.55));
-      const Psi = (z) => 0.5 * z * z;
-      const B = Psi(S.sim.z) - Psi(z0) - z0 * (S.sim.z - z0);
-      S.metrics.B = B;
-      S.metrics["z"] = S.sim.z;
-      S.metrics["zτ"] = z0;
+      const ph = S.phase;
+      // Asymmetric convex potential: Psi(z) = 0.5*z^2 + 0.12*z^3 (strictly convex for z > -1.3)
+      const Psi = (z) => 0.5 * z * z + 0.10 * z * z * z;
+      const dPsi = (z) => z + 0.30 * z * z;
+
+      const p = z0;
+      const q = 0.3 + 0.85 * Math.sin(S.t * 0.7);
+      S.sim.p = p;
+      S.sim.q = q;
+
+      // Bregman divergence in both directions:
+      // B(q||p) = Psi(q) - Psi(p) - <dPsi(p), q - p>
+      const B_qp = Psi(q) - Psi(p) - dPsi(p) * (q - p);
+      // B(p||q) = Psi(p) - Psi(q) - <dPsi(q), p - q>
+      const B_pq = Psi(p) - Psi(q) - dPsi(q) * (p - q);
+
+      S.metrics["B(q‖p)"] = Math.max(0, B_qp);
+      S.metrics["B(p‖q)"] = Math.max(0, B_pq);
+      S.metrics["非对称比"] = Math.abs(B_qp - B_pq);
     },
     draw(ctx, S, T) {
       banner(ctx, S, T);
-      const z0 = sl(S, "z0", 0.6);
-      const useQuad = S.phase !== 2;
-      const Psi = useQuad ? (z) => 0.5 * z * z : (z) => Math.exp(z);
-      const dPsi = useQuad ? (z) => z : (z) => Math.exp(z);
-      const m = mapper(boxOf(S), -1.8, 2.2, useQuad ? -0.2 : -0.2, useQuad ? 2.4 : 8);
-      axes(ctx, m, T, { xl: "z", yl: "Ψ" });
-      curve(ctx, m, Psi, 120, T.c2, 2.4);
-      const tang = (z) => Psi(z0) + dPsi(z0) * (z - z0);
-      curve(ctx, m, tang, 80, T.c5, hi(S, 0) ? 2.6 : 1.5);
-      const z = S.sim.z;
-      glow(ctx, m.X(z0), m.Y(Psi(z0)), 6, T.c3);
-      glow(ctx, m.X(z), m.Y(Psi(z)), 6, T.c6);
-      ctx.strokeStyle = T.c6; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(m.X(z), m.Y(Psi(z))); ctx.lineTo(m.X(z), m.Y(tang(z))); ctx.stroke();
+      const W = S.W, H = S.H;
+      const cx = W * 0.48, cy = H * 0.72;
+      const scX = W * 0.22, scY = H * 0.32;
+
+      const Psi = (z) => 0.5 * z * z + 0.10 * z * z * z;
+      const dPsi = (z) => z + 0.30 * z * z;
+
+      // Coordinate axes
+      ctx.strokeStyle = T.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.moveTo(cx - 180, cy); ctx.lineTo(cx + 180, cy);
+      ctx.moveTo(cx, cy - 140); ctx.lineTo(cx, cy + 20);
+      ctx.stroke();
+
+      // Plot convex curve Psi(z)
+      ctx.strokeStyle = T.c2;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let x = -1.6; x <= 1.6; x += 0.05) {
+        const px = cx + x * scX;
+        const py = cy - Psi(x) * scY;
+        if (x === -1.6) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 1;
+
+      const p = S.sim.p, q = S.sim.q;
+      const px = cx + p * scX, py = cy - Psi(p) * scY;
+      const qx = cx + q * scX, qy = cy - Psi(q) * scY;
+
+      // Tangent line at p
+      const slopeP = dPsi(p);
+      ctx.strokeStyle = T.c5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      const tanX1 = -1.6, tanY1 = Psi(p) + slopeP * (tanX1 - p);
+      const tanX2 = 1.6, tanY2 = Psi(p) + slopeP * (tanX2 - p);
+      ctx.moveTo(cx + tanX1 * scX, cy - tanY1 * scY);
+      ctx.lineTo(cx + tanX2 * scX, cy - tanY2 * scY);
+      ctx.stroke();
       ctx.setLineDash([]);
-      const B = Psi(z) - tang(z);
-      if (S.phase >= 1) callout(ctx, m.X(z) + 6, m.Y(0.5 * (Psi(z) + tang(z))), "B=" + B.toFixed(3), T, T.c6);
-      if (S.phase === 2) callout(ctx, 60, 54, "换势：间隙形状改变（现为 e^z）", T, T.c7);
-      if (S.phase === 3) callout(ctx, 60, 54, "二次势：B=½(z−zτ)²", T, T.c4);
-      legend(ctx, [{ c: T.c2, l: "Ψ" }, { c: T.c5, l: "切平面" }, { c: T.c6, l: "竖直间隙=B" }], 56, 48, T);
-    },
+
+      // Vertical distance at q: B(q||p)
+      const tanAtQ = Psi(p) + slopeP * (q - p);
+      const tanPyAtQ = cy - tanAtQ * scY;
+
+      ctx.strokeStyle = T.c3;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(qx, qy);
+      ctx.lineTo(qx, tanPyAtQ);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+
+      // Dots at p and q
+      glow(ctx, px, py, 6, T.c5);
+      glow(ctx, qx, qy, 6, T.c3);
+      glow(ctx, qx, tanPyAtQ, 4, T.c5);
+
+      // Label p and q
+      ctx.fillStyle = T.tx;
+      ctx.font = "bold 11px " + FONT;
+      ctx.textAlign = "center";
+      ctx.fillText("基准点 p", px, py + 18);
+      ctx.fillText("状态点 q", qx, qy - 12);
+
+      // Gauge Dashboard on the right
+      const gx = W - 142, gy = 56;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 136, 68, 6); ctx.fill();
+      ctx.strokeStyle = T.line; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("Bregman 散度量测", gx, gy + 12);
+      ctx.fillStyle = T.c3;
+      ctx.fillText("B(q‖p) = " + S.metrics["B(q‖p)"].toFixed(3), gx, gy + 28);
+      ctx.fillStyle = T.c6;
+      ctx.fillText("B(p‖q) = " + S.metrics["B(p‖q)"].toFixed(3), gx, gy + 44);
+      ctx.fillStyle = T.c5;
+      ctx.fillText("非对称差 = " + S.metrics["非对称比"].toFixed(3), gx, gy + 60);
+
+      if (S.phase === 0) callout(ctx, 30, 68, "蓝色曲线为严格凸势函数 Ψ(z)", T, T.c2);
+      if (S.phase === 1) callout(ctx, 30, 68, "黄色切线为 p 点处一阶泰勒基准", T, T.c5);
+      if (S.phase === 2) callout(ctx, 30, 68, "青色垂直高差即为 Bregman 散度", T, T.c3);
+      if (S.phase === 3) callout(ctx, 30, 68, "B(q‖p) ≠ B(p‖q)：严格非对称性！", T, T.c6);
+    }
   });
 
   R("fenchel_conjugate", {

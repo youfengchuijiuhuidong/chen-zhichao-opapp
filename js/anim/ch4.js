@@ -516,93 +516,75 @@
   OP.particle_quantization = {
     init(S) {
       const rng = rngFn(11);
-      const xs = [];
-      for (let i = 0; i < 96; i++) {
-        xs.push(rng() < MIX.w ? MIX.m1 + MIX.s1 * randn(rng) : MIX.m2 + MIX.s2 * randn(rng));
-      }
-      S.sim = { rng, xs };
+      S.sim = {
+        rng,
+        pts: Array.from({ length: 64 }, () => (rng() < 0.5 ? -1.0 + 0.3 * randn(rng) : 1.0 + 0.3 * randn(rng)))
+      };
       bind(S, "particle_quantization");
     },
     tick(S) {
-      const { ph } = phof(S);
-      const h = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const M = [0, 10, 36, 80][ph];
-      const xs = S.sim.xs.slice(0, M);
-      let l2 = 0;
-      const N = 64;
-      for (let i = 0; i <= N; i++) {
-        const x = -3 + 6 * i / N;
-        const q = M ? kde1d(xs, x, h).q : 0;
-        const d = q - mixDens(x);
-        l2 += d * d;
-      }
-      S.sim.l2 = l2 / (N + 1);
-      S.metrics.M = String(M);
-      S.metrics.核宽 = h;
-      S.metrics.L2误差 = S.sim.l2;
-      S.metrics.弱收敛 = ph >= 2 ? "贴真密度" : "欠采样";
+      const ph = S.phase;
+      const nActive = ph === 0 ? 8 : (ph === 1 ? 18 : (ph === 2 ? 36 : 64));
+      S.metrics["粒子数 N"] = nActive;
+      S.metrics["误差界 O(1/√N)"] = (1 / Math.sqrt(nActive)).toFixed(3);
     },
     draw(ctx, S, T) {
-      const { ph } = phof(S);
-      const h = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const M = [0, 10, 36, 80][ph];
-      const xs = S.sim.xs.slice(0, M);
-      const B = padBox(S, { r: 124 });
-      const specs = [{ fn: mixDens, col: T.c2, fillA: ph === 0 ? 0.32 : 0.10, lw: ph === 0 ? 2.8 : 1.4 }];
-      if (ph >= 1 && M) specs.push({ fn: (x) => kde1d(xs, x, h).q, col: T.c5, fillA: 0.18, lw: 2.2 });
-      const { X, Y, ymax } = plotCurves(ctx, B, T, -3, 3, specs, "z");
-      ctx.fillStyle = T.mu;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("密度", B.x0 + 6, B.y0 + 12);
-      if (ph >= 1) {
-        xs.forEach((z) => {
-          const px = X(z);
-          ctx.strokeStyle = z < 0 ? T.c3 : T.c6;
-          ctx.lineWidth = ph === 1 ? 2.4 : 1.3;
-          ctx.beginPath();
-          ctx.moveTo(px, B.y1);
-          ctx.lineTo(px, Y(ymax * (ph === 1 ? 0.55 : 0.22)));
-          ctx.stroke();
-          ctx.fillStyle = z < 0 ? T.c3 : T.c6;
-          ctx.beginPath();
-          ctx.arc(px, B.y1, ph === 3 ? 4.4 : 3.2, 0, TWO);
-          ctx.fill();
-        });
+      banner(ctx, S, T);
+      const W = S.W, H = S.H;
+      const cx = W * 0.46, cy = H * 0.58;
+      const scX = W * 0.20, scY = H * 0.32;
+
+      // 上层：连续光滑真实密度 Q(z)（蓝色面积曲线）
+      ctx.fillStyle = T.dark ? "rgba(91,140,255,0.18)" : "rgba(91,140,255,0.22)";
+      ctx.strokeStyle = T.c2;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 1.8 * scX, cy);
+      for (let x = -1.8; x <= 1.8; x += 0.05) {
+        const dens = 0.5 * (gauss(x, -1.0, 0.35) + gauss(x, 1.0, 0.35));
+        ctx.lineTo(cx + x * scX, cy - dens * scY);
       }
-      if (ph === 3) {
-        ctx.strokeStyle = T.c3;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(X(-2.15), Y(ymax * 0.98), X(-0.15) - X(-2.15), Y(0) - Y(ymax * 0.98));
-        ctx.strokeStyle = T.c6;
-        ctx.strokeRect(X(0.15), Y(ymax * 0.98), X(2.25) - X(0.15), Y(0) - Y(ymax * 0.98));
-        ctx.fillStyle = T.c3;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("峰 1 粒子簇", X(-2.05), Y(ymax * 0.98) - 6);
-        ctx.fillStyle = T.c6;
-        ctx.fillText("峰 2 粒子簇", X(0.25), Y(ymax * 0.98) - 6);
+      ctx.lineTo(cx + 1.8 * scX, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.lineWidth = 1;
+
+      // 下层：离散 Dirac delta 脉冲针
+      const n = S.metrics["粒子数 N"] || 16;
+      for (let i = 0; i < n; i++) {
+        const x = S.sim.pts[i];
+        const px = cx + x * scX;
+        ctx.strokeStyle = T.c5;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(px, cy);
+        ctx.lineTo(px, cy + 38);
+        ctx.stroke();
+        glow(ctx, px, cy + 38, 3, T.c3);
       }
-      const rx = B.x1 + 10;
-      panel(ctx, rx, 34, 112, S.H - 82, T, true);
-      legend(ctx, [
-        { c: T.c2, lab: "真连续 Q" },
-        { c: T.c5, lab: "经验 KDE" },
-        { c: T.c3, lab: "左峰 δ" },
-        { c: T.c6, lab: "右峰 δ" },
-      ], rx + 8, 54, T);
-      ctx.fillStyle = T.tx;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("Q = Σᵢ δᵢ / M", rx + 8, 128);
-      ctx.fillStyle = T.mu;
-      ctx.fillText("M = " + M, rx + 8, 148);
-      ctx.fillText("h = " + h.toFixed(2), rx + 8, 166);
-      ctx.fillText("L² = " + (S.sim.l2 || 0).toFixed(3), rx + 8, 184);
-      caption(ctx, S, T, ["连续密度：参数族", "量子化成 M 个尖峰", "M↑ 弱收敛到原分布", "多峰：每峰一簇粒子"][ph], true);
-    },
+      ctx.lineWidth = 1;
+
+      // 仪表板
+      const gx = W - 148, gy = 56;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 142, 60, 6); ctx.fill();
+      ctx.strokeStyle = T.line; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("经验测度经验量化", gx, gy + 12);
+      ctx.fillStyle = T.c5;
+      ctx.fillText("采样粒子数 N = " + n, gx, gy + 28);
+      ctx.fillStyle = T.c3;
+      ctx.fillText("误差 O(1/√N) ≈ " + S.metrics["误差界 O(1/√N)"], gx, gy + 44);
+
+      if (S.phase === 0) callout(ctx, 30, 68, "阶段 1：连续多峰光滑目标分布 Q(z)", T, T.c2);
+      if (S.phase === 1) callout(ctx, 30, 68, "阶段 2：离散 Dirac δ 脉冲经验测度抽样", T, T.c5);
+      if (S.phase === 2) callout(ctx, 30, 68, "阶段 3：粒子数激增，脉冲逼近连续边界", T, T.c3);
+      if (S.phase === 3) callout(ctx, 30, 68, "阶段 4：依弱收敛拓扑逼近无穷维极限", T, T.c4);
+    }
   };
 
-  /* ============================================================
-   * 2. 狄拉克德尔塔  ⟨δ_{z_i}, f⟩ = f(z_i)
-   * ============================================================ */
   OP.dirac_delta = {
     init(S) {
       S.sim = { z0: 0.42 };
@@ -1208,138 +1190,89 @@
    * ============================================================ */
   OP.hamiltonian_infinite_horizon = {
     init(S) {
-      const rng = rngFn(81);
-      S.sim = { rng, z0: 0.7, pts: makeCloud(rng, 18, -0.4, 0, 0.7, 0.5) };
+      S.sim = { traj: [] };
       bind(S, "hamiltonian_infinite_horizon");
     },
-    tick(S) {
+    tick(S, dt) {
       const uamp = clamp(sl(S, "uamp", 0.45), 0, 1.3);
-      const z0 = 0.55 + 0.4 * Math.sin(S.t * 0.35);
-      S.sim.z0 = z0;
-      const scQ = kdeScore2d(S.sim.pts, z0, 0, 0.45);
-      const scP = post2d(z0, 0);
-      // 约化 H(u)= 1/2 u² + u·score_Q   （驻点 u*=-score_Q）
-      const sQ = scQ.sx;
-      S.sim.sQ = sQ;
-      S.sim.sP = scP.sx;
-      S.sim.uStar = -sQ;
-      S.sim.uTrial = lerp(-2.2, 2.2, (uamp / 1.3));
-      const H = (u) => 0.5 * u * u + u * sQ;
-      S.sim.Hstar = H(S.sim.uStar);
-      S.sim.Htrial = H(S.sim.uTrial);
-      S.sim.phi = scP.sx + S.sim.uStar;
-      S.metrics.score_Q = sQ;
-      S.metrics.u星 = S.sim.uStar;
-      S.metrics.试探u = S.sim.uTrial;
-      S.metrics.H试探 = S.sim.Htrial;
+      const t = S.t;
+      // Hyperbolic saddle point flow: z decays to 0, lambda decays to 0
+      const z = 1.2 * Math.exp(-0.8 * (t % 4.0));
+      const lambda = 0.9 * Math.exp(-1.1 * (t % 4.0));
+      if (!S.sim.traj || (t % 4.0 < 0.05)) S.sim.traj = [];
+      S.sim.traj.push({ z, lambda });
+
+      S.metrics["状态偏离 z"] = z;
+      S.metrics["伴随协态 λ"] = lambda;
+      S.metrics["哈密顿量 H"] = -0.5 * (z * z + lambda * lambda) * uamp;
     },
     draw(ctx, S, T) {
-      const { ph } = phof(S);
-      const left = { x0: 24, y0: 40, x1: S.W * 0.5 - 8, y1: S.H - 40 };
-      const sQ = S.sim.sQ || 0;
-      const H = (u) => 0.5 * u * u + u * sQ;
-      const us = linspace(-2.4, 2.4, 80);
-      const Hs = us.map(H);
-      let hmn = Infinity, hmx = -Infinity;
-      Hs.forEach((v) => { if (v < hmn) hmn = v; if (v > hmx) hmx = v; });
-      const X = (u) => left.x0 + (u + 2.4) / 4.8 * (left.x1 - left.x0);
-      const Y = (h) => left.y1 - (h - hmn) / (hmx - hmn || 1) * (left.y1 - left.y0 - 8);
-      panel(ctx, left.x0 - 6, left.y0 - 8, left.x1 - left.x0 + 12, left.y1 - left.y0 + 16, T, ph <= 2);
-      ctx.fillStyle = T.mu;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("u", (left.x0 + left.x1) / 2, left.y1 + 12);
-      ctx.fillText("H", left.x0 + 6, left.y0 + 4);
-      ctx.strokeStyle = T.line;
+      banner(ctx, S, T);
+      const W = S.W, H = S.H;
+      const cx = W * 0.46, cy = H * 0.58;
+      const scZ = W * 0.22, scL = H * 0.28;
+
+      // 相空间坐标轴 (z 横轴, lambda 纵轴)
+      ctx.strokeStyle = T.dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
       ctx.beginPath();
-      ctx.moveTo(left.x0, Y(0));
-      ctx.lineTo(left.x1, Y(0));
+      ctx.moveTo(cx - 160, cy); ctx.lineTo(cx + 160, cy);
+      ctx.moveTo(cx, cy - 110); ctx.lineTo(cx, cy + 110);
       ctx.stroke();
-      ctx.strokeStyle = T.c2;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      us.forEach((u, i) => {
-        const px = X(u), py = Y(Hs[i]);
-        if (i) ctx.lineTo(px, py);
-        else ctx.moveTo(px, py);
-      });
-      ctx.stroke();
-      if (ph >= 1) {
-        ctx.strokeStyle = T.c7;
-        ctx.setLineDash([5, 3]);
+
+      ctx.fillStyle = T.mu; ctx.font = "10px " + FONT;
+      ctx.fillText("状态偏差 z", cx + 130, cy + 14);
+      ctx.fillText("协态 λ", cx + 8, cy - 95);
+
+      // 鞍点相空间流动等高线
+      ctx.strokeStyle = T.dark ? "rgba(192,132,252,0.18)" : "rgba(192,132,252,0.22)";
+      for (let c = 0.3; c <= 1.2; c += 0.3) {
         ctx.beginPath();
-        us.forEach((u, i) => {
-          const v = u * sQ;
-          const px = X(u), py = Y(v);
-          if (i) ctx.lineTo(px, py);
-          else ctx.moveTo(px, py);
+        for (let x = 0.1; x <= 1.5; x += 0.05) {
+          const y = c / x;
+          if (y < 2.0) {
+            const px = cx + x * scZ * 0.7, py = cy - y * scL * 0.5;
+            if (x === 0.1) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // 稳定流形轨迹
+      if (S.sim.traj && S.sim.traj.length > 1) {
+        ctx.strokeStyle = T.c7;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        S.sim.traj.forEach((pt, i) => {
+          const px = cx + pt.z * scZ, py = cy - pt.lambda * scL;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         });
         ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.lineWidth = 1;
+
+        const cur = S.sim.traj[S.sim.traj.length - 1];
+        glow(ctx, cx + cur.z * scZ, cy - cur.lambda * scL, 6, T.c3);
       }
-      if (ph >= 2) {
-        ctx.fillStyle = T.c6;
-        ctx.beginPath();
-        ctx.arc(X(S.sim.uStar), Y(S.sim.Hstar), 7, 0, TWO);
-        ctx.fill();
-        ctx.fillStyle = T.c6;
-        ctx.font = "11px sans-serif";
-        ctx.fillText("u* = −∇log Q", X(S.sim.uStar) + 8, Y(S.sim.Hstar) - 6);
-      }
-      const ut = S.sim.uTrial, Ht = S.sim.Htrial;
-      ctx.strokeStyle = T.c5;
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(X(ut), left.y0);
-      ctx.lineTo(X(ut), left.y1);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = rgba(T.c5, 0.22);
-      ctx.fillRect(X(ut) - 7, left.y0, 14, left.y1 - left.y0);
-      ctx.fillStyle = T.c5;
-      ctx.beginPath();
-      ctx.arc(X(ut), Y(Ht), 8, 0, TWO);
-      ctx.fill();
-      ctx.font = "11px sans-serif";
-      ctx.fillStyle = T.c5;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("试探 u=" + ut.toFixed(2) + "  H=" + Ht.toFixed(2), left.x0 + 8, left.y0 + 16);
-      // 右：场（独立坐标，避免 view2d 闭包仍用旧 x0）
-      const VR = {
-        x0: S.W * 0.52, y0: 36, x1: S.W - 16, y1: S.H - 36,
-        xr: [-2.4, 2.4], yr: [-1.6, 1.6],
-      };
-      VR.w = VR.x1 - VR.x0;
-      VR.h = VR.y1 - VR.y0;
-      VR.X = (x) => VR.x0 + (x - VR.xr[0]) / (VR.xr[1] - VR.xr[0]) * VR.w;
-      VR.Y = (y) => VR.y1 - (y - VR.yr[0]) / (VR.yr[1] - VR.yr[0]) * VR.h;
-      heat2d(ctx, VR, T, T.c6, 16, 10);
-      if (ph === 3) {
-        fieldArrows(ctx, VR, T, (x, y) => {
-          const P = post2d(x, y);
-          const Q = kdeScore2d(S.sim.pts, x, y, 0.5);
-          return { x: P.sx - Q.sx, y: P.sy - Q.sy };
-        }, T.c5, 7, 5, 16);
-        ctx.fillStyle = T.c5;
-        ctx.font = "11px sans-serif";
-        ctx.fillText("φ = ∇log P − ∇log Q", VR.x0 + 8, VR.y0 + 14);
-      } else {
-        dots(ctx, S.sim.pts, VR, T.c2, 3.5);
-        vbar(ctx, VR.x1 - 42, VR.y0 + 10, 26, VR.h - 36, 0.5 * ut * ut, 2.6, T.c5, "½u²", T);
-      }
-      const msgs = [
-        "H 作为 u 的二次函数",
-        "加上连续性约束的线性定价",
-        "极值条件得到 u*",
-        "代回 φ = ∇log P − ∇log Q",
-      ];
-      caption(ctx, S, T, msgs[ph], true);
-    },
+
+      // 仪表板
+      const gx = W - 150, gy = 56;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 144, 60, 6); ctx.fill();
+      ctx.strokeStyle = T.line; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("哈密顿鞍点相空间", gx, gy + 12);
+      ctx.fillStyle = T.c7;
+      ctx.fillText("协态 λ(t) → " + S.metrics["伴随协态 λ"].toFixed(3), gx, gy + 28);
+      ctx.fillStyle = T.c3;
+      ctx.fillText("横截条件: lim λ(t)=0", gx, gy + 44);
+
+      if (S.phase === 0) callout(ctx, 30, 68, "阶段 1：构建相空间 (z, λ) 状态-协态对偶坐标", T, T.c7);
+      if (S.phase === 1) callout(ctx, 30, 68, "阶段 2：哈密顿向量场引导鞍点双曲流动", T, T.c5);
+      if (S.phase === 2) callout(ctx, 30, 68, "阶段 3：无穷时域横截条件迫使 λ(∞) 渐近衰减至 0", T, T.c3);
+      if (S.phase === 3) callout(ctx, 30, 68, "阶段 4：达到最优稳态控制闭环", T, T.c4);
+    }
   };
 
-  /* ============================================================
-   * 9. 伴随态  λ=1/Q
-   * ============================================================ */
   OP.adjoint_state = {
     init(S) {
       S.sim = { xs: linspace(-2.4, 2.4, 40).map((x) => x * 0.15) };

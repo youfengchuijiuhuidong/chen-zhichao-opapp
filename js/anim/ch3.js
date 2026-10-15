@@ -670,80 +670,91 @@
   reg("entropy_functional", {
     init(S) {
       const rng = mulberry(41);
-      S.sim.z0 = Array.from({ length: 48 }, () => {
-        const u = rng() || 1e-9, v = rng() || 1e-9;
-        return Math.sqrt(-2 * Math.log(u)) * Math.cos(TWO * v);
-      });
-      S.sim.u0 = Array.from({ length: 48 }, (_, i) => (i + 0.5) / 48);
-      S.sim.xs = S.sim.z0.slice();
+      S.sim = {
+        pts: Array.from({ length: 48 }, () => ({
+          x: (rng() - 0.5) * 1.8,
+          vx: 0
+        }))
+      };
     },
-    tick(S) {
-      const spread = S.sliders.spread != null ? S.sliders.spread : 0.7;
+    tick(S, dt) {
+      const spread = S.sliders.spread != null ? S.sliders.spread : 1.0;
       const ph = S.phase;
-      const sig = ph === 0 ? 0.18 * (0.6 + 0.4 * spread) : ph === 1 ? 0.45 * spread + 0.12 : ph === 2 ? 1.35 * spread + 0.35 : 1.6 * spread;
-      S.sim.sig = Math.max(0.08, sig);
-      for (let i = 0; i < 48; i++) {
-        S.sim.xs[i] = ph === 2 ? (-2.4 + 4.8 * S.sim.u0[i]) : (S.sim.sig * S.sim.z0[i]);
-      }
-      const Hg = hG(S.sim.sig);
-      const Hh = entHist(hist(S.sim.xs, -3, 3, 24));
-      S.metrics.微分熵H = Hg;
-      S.metrics.直方图熵 = Hh;
-      S.metrics.σ = S.sim.sig;
-      S.metrics.均匀上界 = Math.log(6);
+
+      // Double-well potential V(x) = (x^2 - 1)^2
+      // Two modes at x = -0.9 and x = +0.9
+      let varX = 0;
+      S.sim.pts.forEach((p, i) => {
+        // Force 1: Potential well pulling inward (reconstruction)
+        const f_well = -4 * p.x * (p.x * p.x - 0.82);
+
+        // Force 2: Negative entropy gradient pushing outward (dispersion)
+        let f_ent = 0;
+        S.sim.pts.forEach((other, j) => {
+          if (i !== j) {
+            const dx = p.x - other.x;
+            f_ent += dx / (dx * dx + 0.08);
+          }
+        });
+        f_ent = (f_ent / S.sim.pts.length) * spread * 1.4;
+
+        const netForce = (ph >= 1) ? (f_well * 0.35 + f_ent) : f_well;
+        p.vx = (p.vx || 0) * 0.88 + netForce * (dt || 0.016) * 0.8;
+        p.x += p.vx * (dt || 0.016);
+        varX += p.x * p.x;
+      });
+
+      varX /= S.sim.pts.length;
+      const H_est = 0.5 * Math.log(TWO * Math.E * Math.max(0.1, varX));
+
+      S.metrics["负熵 H[Q]"] = H_est.toFixed(3);
+      S.metrics["分布方差 Var"] = varX.toFixed(3);
+      S.metrics["平衡态"] = ph >= 2 ? "✓ 已平衡" : "收拢中";
     },
     draw(ctx, S, T) {
-      const spread = S.sliders.spread != null ? S.sliders.spread : 0.7;
+      banner(ctx, S, T);
+      const W = S.W, H = S.H;
+      const cx = W * 0.46, cy = H * 0.62;
+      const scX = W * 0.22, scY = H * 0.28;
+
+      // Draw double-well potential curve
+      ctx.strokeStyle = T.dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
+      ctx.beginPath();
+      for (let x = -1.6; x <= 1.6; x += 0.05) {
+        const v = 0.5 * Math.pow(x * x - 0.82, 2);
+        const px = cx + x * scX, py = cy - v * scY * 0.8;
+        if (x === -1.6) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Draw particles
       const ph = S.phase;
-      const sig = ph === 0 ? 0.18 * (0.6 + 0.4 * spread) : ph === 1 ? 0.45 * spread + 0.12 : ph === 2 ? 1.35 * spread + 0.35 : 1.6 * spread;
-      const titles = ["尖峰密度：熵低", "逐渐摊平：熵升高", "到均匀：熵最大", "敢确定 → 瞎猜"];
-      badge(ctx, S, T, titles[ph]); chip(ctx, S, T, "H[Q]=−∫ Q log Q dx");
-      paramBadge(ctx, S, T, "散布", spread);
-      const B = box(S, 42, 48, 86, 38);
-      const mX = (x) => B.x0 + (x + 3) / 6 * B.w;
-      const peak = gauss(0, 0, Math.max(0.12, ph === 2 ? 2.2 : sig));
-      const mY = (y) => B.y1 - y / Math.max(peak, 0.25) * (B.h - 6);
-      axes(ctx, B.x0, B.y0, B.x1, B.y1, T, "x", "Q(x)");
-      const xs = [], ys = [], yu = [];
-      const ulev = 1 / 6;
-      for (let i = 0; i <= 100; i++) {
-        const x = -3 + 6 * i / 100;
-        xs.push(x);
-        ys.push(ph === 2 ? (Math.abs(x) < 2.9 ? ulev : 0) : gauss(x, 0, Math.max(0.1, sig)));
-        yu.push(ulev);
-      }
-      fillCurve(ctx, xs, ys, mX, mY, ph === 2 ? T.c6 : T.c2, 0.22);
-      if (ph >= 1) {
-        ctx.setLineDash([5, 4]); ctx.strokeStyle = T.c5; ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.moveTo(mX(-3), mY(ulev)); ctx.lineTo(mX(3), mY(ulev)); ctx.stroke();
-        ctx.setLineDash([]);
-        txt(ctx, "均匀（最大熵）", mX(2.2), mY(ulev) - 6, T.c5, 11);
-      }
-      (S.sim.xs || []).forEach((x) => {
-        ctx.fillStyle = T.c5;
-        ctx.beginPath(); ctx.arc(mX(clamp(x, -2.95, 2.95)), B.y1 - 6, 3, 0, TWO); ctx.fill();
+      const col = ph === 0 ? T.c6 : (ph === 1 ? T.c5 : T.c3);
+      S.sim.pts.forEach(p => {
+        const py = cy + 15 + Math.sin(p.x * 5) * 6;
+        glow(ctx, cx + p.x * scX, py, 4, col);
       });
-      /* 右侧熵柱（微分熵可负，把 -1.2 当作底） */
-      const H = ph === 2 ? Math.log(6) : hG(Math.max(0.1, sig));
-      const Hmax = Math.log(6), Hmin = -1.2;
-      const tbar = clamp((H - Hmin) / (Hmax - Hmin), 0, 1);
-      const bh = tbar * (B.h - 10);
-      const bx = S.W - 62;
-      ctx.fillStyle = T.dark ? "#1a2438" : "#dde5f2";
-      rr(ctx, bx, B.y0, 28, B.h, 6); ctx.fill();
-      ctx.fillStyle = mixHex(T.c3, T.c6, tbar);
-      ctx.fillRect(bx + 3, B.y1 - bh, 22, Math.max(2, bh));
-      txt(ctx, "H", bx + 14, B.y0 - 6, T.mu, 11, "center");
-      txt(ctx, H.toFixed(2), bx + 14, B.y1 + 14, T.tx, 11, "center");
-      if (ph === 3) {
-        txt(ctx, "尖峰 → 点估计敢确定；均匀 → 支撑里瞎猜", 44, S.H - 16, T.c6, 12, "left", true);
-      }
-    },
+
+      // Gauge Dashboard
+      const gx = W - 146, gy = 56;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 140, 60, 6); ctx.fill();
+      ctx.strokeStyle = T.line; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("负熵正则动态平衡", gx, gy + 12);
+      ctx.fillStyle = col;
+      ctx.fillText("H[Q] = " + S.metrics["负熵 H[Q]"] + " nats", gx, gy + 28);
+      ctx.fillStyle = T.mu;
+      ctx.fillText("分布方差 = " + S.metrics["分布方差 Var"], gx, gy + 44);
+
+      if (S.phase === 0) callout(ctx, 30, 68, "阶段 1：重构外力拉拢粒子向工况模态收拢", T, T.c6);
+      if (S.phase === 1) callout(ctx, 30, 68, "阶段 2：负熵梯度 -∇ log Q 产生排斥扩散", T, T.c5);
+      if (S.phase === 2) callout(ctx, 30, 68, "阶段 3：双力平衡，阻止后验过度塌缩", T, T.c3);
+      if (S.phase === 3) callout(ctx, 30, 68, "阶段 4：滑动 spread 调节熵惩罚强度", T, T.c2);
+    }
   });
 
-  /* ===================================================================
-   * 6. 条件补全似然  L_imp = E_Q[log p(xmiss|xobs)]
-   * =================================================================== */
   reg("imputation_likelihood", {
     init(S) {
       const rng = mulberry(77);

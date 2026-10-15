@@ -1612,100 +1612,106 @@
    * ============================================================ */
   OP.kems_simplex_update = {
     init(S) {
-      const pts = Array.from({ length: 12 }, () => softmax([Math.random(), Math.random() * 0.5, Math.random()]));
-      S.sim = { pts, hist: [], acc: 0, tgt: [0.12, 0.72, 0.16], mean: [1 / 3, 1 / 3, 1 / 3], phi: null, eps: 0.22 };
+      S.sim = {
+        w: [0.2, 0.5, 0.3],
+        dual: [-1.2, 0.4, 0.1],
+        traj: []
+      };
     },
     tick(S, dt) {
       const eps = S.sliders.eps != null ? S.sliders.eps : 0.22;
-      const tgt = [0.12, 0.72, 0.16];
-      const scores = S.sim.pts.map((p) => projectTangent(p, scoreToward(p, tgt)));
-      const phi = phiRKHS(S.sim.pts, scores, 0.28);
-      S.sim.phi = phi;
-      S.sim.eps = eps;
-      if (S.phase >= 2) {
-        S.sim.acc += dt;
-        if (S.sim.acc > 0.07) {
-          S.sim.acc = 0;
-          S.sim.pts = S.sim.pts.map((p, i) => {
-            const mix = phi[i].map((v, k) => v + 1.6 * scores[i][k]);
-            return mirrorStep(p, projectTangent(p, mix), eps * 1.55);
-          });
-        }
-      }
-      const mean = [0, 0, 0];
-      S.sim.pts.forEach((p) => { mean[0] += p[0]; mean[1] += p[1]; mean[2] += p[2]; });
-      const n = S.sim.pts.length;
-      const m = [mean[0] / n, mean[1] / n, mean[2] / n];
-      const sums = S.sim.pts.map((p) => p[0] + p[1] + p[2]);
-      S.metrics.ε = eps;
-      S.metrics.行和 = sums.reduce((a, b) => a + b, 0) / n;
-      S.metrics.minα = Math.min.apply(null, S.sim.pts.map((p) => Math.min.apply(null, p)));
-      S.metrics.KL = klDisc(m, tgt);
-      pushHist(S.sim.hist, S.metrics.KL, 80);
-      S.sim.mean = m; S.sim.tgt = tgt;
+      const ph = S.phase;
+
+      // Gradient direction in dual space
+      const grad = [0.4 * Math.sin(S.t), -0.3 * Math.cos(S.t * 0.8), 0.2 * Math.sin(S.t * 1.2)];
+      const newDual = S.sim.dual.map((v, i) => v - eps * grad[i]);
+      S.sim.dual = newDual;
+
+      // Softmax mirror map: back to simplex
+      const exps = newDual.map(v => Math.exp(v));
+      const sumExp = exps.reduce((a, b) => a + b, 0);
+      const w = exps.map(v => v / sumExp);
+      S.sim.w = w;
+
+      if (!S.sim.traj) S.sim.traj = [];
+      S.sim.traj.push([...w]);
+      while (S.sim.traj.length > 36) S.sim.traj.shift();
+
+      S.metrics["单纯形权重 w"] = w.map(v => v.toFixed(2)).join(", ");
+      S.metrics["可行性 ∑w"] = w.reduce((a, b) => a + b, 0).toFixed(3);
     },
     draw(ctx, S, T) {
       banner(ctx, S, T);
-      const ph = S.phase;
-      const tgt = S.sim.tgt || [0.12, 0.72, 0.16];
-      const mean = S.sim.mean || [1 / 3, 1 / 3, 1 / 3];
-      const cx = ph === 2 ? S.W * 0.24 : S.W * 0.34;
-      const cy = S.H * 0.58, sc = Math.min(ph === 2 ? 100 : 130, S.W * 0.2);
-      drawSimplex(ctx, cx, cy, sc, T);
-      const tgtP = simplexXY(tgt[0], tgt[1], tgt[2], cx, cy, sc);
-      ctx.strokeStyle = T.c6;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath(); ctx.arc(tgtP.x, tgtP.y, 11, 0, TWO); ctx.stroke();
-      ctx.setLineDash([]);
-      (S.sim.pts || []).forEach((a, i) => {
-        const p = simplexXY(a[0], a[1], a[2], cx, cy, sc);
-        roundDot(ctx, p.x, p.y, 4.8, ph >= 3 ? T.c3 : T.c2);
-        if (ph === 1 && S.sim.phi) {
-          const phv = S.sim.phi[i];
-          const q = simplexXY(a[0] + 0.12 * phv[0], a[1] + 0.12 * phv[1], a[2] + 0.12 * phv[2], cx, cy, sc);
-          arrow(ctx, p.x, p.y, q.x - p.x, q.y - p.y, T.c5);
-        }
-      });
-      const mp = simplexXY(mean[0], mean[1], mean[2], cx, cy, sc);
-      roundDot(ctx, mp.x, mp.y, 6, T.c5);
-      const rx = S.W * 0.52;
-      if (ph === 2) {
-        panel(ctx, rx, 50, S.W - rx - 10, S.H - 96, T, true, T.c7);
-        ctx.fillStyle = T.tx;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("对偶平移  log α + ε φ", rx + 8, 70);
-        const mx = rx + (S.W - rx - 10) / 2, my = S.H * 0.52, scd = 38;
-        ctx.strokeStyle = T.line;
-        ctx.beginPath(); ctx.moveTo(rx + 14, my); ctx.lineTo(S.W - 22, my); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(mx, 88); ctx.lineTo(mx, S.H - 62); ctx.stroke();
-        const eps = nv(S.sim.eps) || 0.22;
-        (S.sim.pts || []).forEach((a, i) => {
-          const z0 = a.map((v) => Math.log(Math.max(1e-8, v)));
-          const d0 = dualXY(z0);
-          roundDot(ctx, mx + d0.x * scd, my - d0.y * scd, 4, T.c2);
-          if (S.sim.phi) {
-            const z1 = z0.map((v, k) => v + eps * 2.4 * S.sim.phi[i][k]);
-            const d1 = dualXY(z1);
-            arrow(ctx, mx + d0.x * scd, my - d0.y * scd, (d1.x - d0.x) * scd, -(d1.y - d0.y) * scd, T.c7);
-          }
+      const W = S.W, H = S.H;
+      const cx = W * 0.46, cy = H * 0.62;
+      const R = Math.min(W, H) * 0.35;
+
+      // Equilateral triangle vertices of 3D simplex Δ^3
+      const v1 = { x: cx, y: cy - R };
+      const v2 = { x: cx - R * 0.866, y: cy + R * 0.5 };
+      const v3 = { x: cx + R * 0.866, y: cy + R * 0.5 };
+
+      // Draw Simplex Triangle
+      ctx.strokeStyle = T.c2;
+      ctx.lineWidth = 2;
+      ctx.fillStyle = T.dark ? "rgba(91,140,255,0.06)" : "rgba(91,140,255,0.10)";
+      ctx.beginPath();
+      ctx.moveTo(v1.x, v1.y);
+      ctx.lineTo(v2.x, v2.y);
+      ctx.lineTo(v3.x, v3.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.lineWidth = 1;
+
+      // Label vertices
+      ctx.fillStyle = T.tx; ctx.font = "bold 10px " + FONT; ctx.textAlign = "center";
+      ctx.fillText("基准 A1 (1,0,0)", v1.x, v1.y - 8);
+      ctx.fillText("基准 A2 (0,1,0)", v2.x - 20, v2.y + 15);
+      ctx.fillText("基准 A3 (0,0,1)", v3.x + 20, v3.y + 15);
+
+      // Map barycentric w = [w1, w2, w3] to 2D
+      const w = S.sim.w;
+      const ptX = w[0] * v1.x + w[1] * v2.x + w[2] * v3.x;
+      const ptY = w[0] * v1.y + w[1] * v2.y + w[2] * v3.y;
+
+      // Trajectory inside simplex
+      if (S.sim.traj && S.sim.traj.length > 1) {
+        ctx.strokeStyle = T.c5;
+        ctx.beginPath();
+        S.sim.traj.forEach((tw, i) => {
+          const tx = tw[0] * v1.x + tw[1] * v2.x + tw[2] * v3.x;
+          const ty = tw[0] * v1.y + tw[1] * v2.y + tw[2] * v3.y;
+          if (i === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
         });
-      } else {
-        const labs = ["粒子 ∈ Δ", "φ_RKHS 速度场", "对偶平移 logα+εφ", "softmax 拉回，靠近最优行"];
-        labs.forEach((s, i) => {
-          panel(ctx, S.W * 0.62, 52 + i * 48, S.W * 0.36, 42, T, ph === i, [T.c2, T.c5, T.c7, T.c3][i]);
-          ctx.fillStyle = T.tx;
-          ctx.font = "12px sans-serif";
-          ctx.fillText((i + 1) + ". " + s, S.W * 0.62 + 8, 78 + i * 48);
-        });
+        ctx.stroke();
       }
-      spark(ctx, S.sim.hist, 16, S.H - 40, 180, 20, T.c3, T, 0, 1.6);
-      ctx.fillStyle = T.mu; ctx.font = "10px sans-serif"; ctx.fillText("KL 轨迹", 16, S.H - 44);
-    },
+
+      // Active state point
+      glow(ctx, ptX, ptY, 7, T.c3);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(ptX, ptY, 3, 0, Math.PI * 2); ctx.fill();
+
+      // Dashboard
+      const gx = W - 152, gy = 56;
+      ctx.fillStyle = T.dark ? "rgba(11,18,32,0.85)" : "rgba(255,255,255,0.88)";
+      rr(ctx, gx - 5, gy - 5, 146, 62, 6); ctx.fill();
+      ctx.strokeStyle = T.line; ctx.stroke();
+
+      ctx.fillStyle = T.tx; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("KEMS 镜像单纯形映射", gx, gy + 12);
+      ctx.fillStyle = T.c3;
+      ctx.fillText("权重: [" + S.metrics["单纯形权重 w"] + "]", gx, gy + 28);
+      ctx.fillStyle = T.c4;
+      ctx.fillText("约束: ∑w = " + S.metrics["可行性 ∑w"] + " ✓", gx, gy + 44);
+
+      if (S.phase === 0) callout(ctx, 30, 68, "阶段 1：定义概率单纯形 Δ^3 闭凸可行域", T, T.c2);
+      if (S.phase === 1) callout(ctx, 30, 68, "阶段 2：对偶空间无约束自由梯度下降", T, T.c5);
+      if (S.phase === 2) callout(ctx, 30, 68, "阶段 3：Softmax 镜像回投影，严格锁死在单纯形内", T, T.c3);
+      if (S.phase === 3) callout(ctx, 30, 68, "阶段 4：负熵势阻断边界，无需任何硬性截断投影", T, T.c4);
+    }
   };
 
-  /* ============================================================
-   * 15. 前向欧拉离散镜像 ODE
-   * ============================================================ */
   OP.forward_euler_ode = {
     init(S) {
       S.sim = { pathC: [], pathE: [], pathBig: [], zE: { x: 1.1, y: 0.7 }, zB: { x: 1.1, y: 0.7 }, kappa: 0.6, omega: 2 };
