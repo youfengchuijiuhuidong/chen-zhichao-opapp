@@ -1,0 +1,530 @@
+{
+  "round": 6,
+  "n_ops": 19,
+  "pages": [
+    {
+      "id": "mpnn_message",
+      "hit": true,
+      "px": [
+        3617605,
+        3647507,
+        4272750,
+        5607404
+      ],
+      "diffs": [
+        29902,
+        625243,
+        1334654
+      ],
+      "min_diff": 29902,
+      "slider_delta": 689,
+      "caption": [
+        "1/4  画出工艺变量小图",
+        "2/4  中心节点高亮",
+        "3/4  邻居把特征沿边送进来",
+        "4/4  聚合成一条消息向量 M_i"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "mpnn_update",
+      "hit": true,
+      "px": [
+        3658210,
+        3857733,
+        3896280,
+        4371626
+      ],
+      "diffs": [
+        199523,
+        38547,
+        475346
+      ],
+      "min_diff": 38547,
+      "slider_delta": 143403,
+      "caption": [
+        "1/4  节点原特征 F_i",
+        "2/4  收到 M_i",
+        "3/4  Update 融合两者",
+        "4/4  新特征 F'_i 颜色/位置改变"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "nam_normalize",
+      "hit": true,
+      "px": [
+        4560445,
+        4749527,
+        6441346,
+        5942262
+      ],
+      "diffs": [
+        189082,
+        1691819,
+        499084
+      ],
+      "min_diff": 189082,
+      "slider_delta": 785091,
+      "caption": [
+        "1/4  二值邻接 Â",
+        "2/4  算每个节点的度",
+        "3/4  对称缩放得到 A",
+        "4/4  每行非负、行和靠近 1，作为单纯形点"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "simplex_factorization",
+      "hit": true,
+      "px": [
+        3999916,
+        4619956,
+        4978312,
+        4894080
+      ],
+      "diffs": [
+        620040,
+        358356,
+        84232
+      ],
+      "min_diff": 84232,
+      "slider_delta": 487,
+      "caption": [
+        "1/4  一张邻接矩阵",
+        "2/4  拆成一行一行的柱状图",
+        "3/4  每行和为 1、非负：落在三角形（2-单纯形）内",
+        "4/4  各行独立更新"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "dirichlet_entropy",
+      "hit": true,
+      "px": [
+        3684278,
+        3590053,
+        4039914,
+        4396313
+      ],
+      "diffs": [
+        94225,
+        449861,
+        356399
+      ],
+      "min_diff": 94225,
+      "slider_delta": 98951,
+      "caption": [
+        "1/4  单纯形上 Dirichlet 密度随 θ 变尖或变平",
+        "2/4  熵：平（θ→1）高、尖（θ大）低",
+        "3/4  弹出 Gamma/ψ 计算很贵的提示",
+        "4/4  动机：不要显式算这个熵，改镜像下降"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "implicit_likelihood",
+      "hit": true,
+      "px": [
+        4081176,
+        3680064,
+        4145742,
+        5363869
+      ],
+      "diffs": [
+        401112,
+        465678,
+        1218127
+      ],
+      "min_diff": 401112,
+      "slider_delta": 256959,
+      "caption": [
+        "1/4  若干邻接粒子",
+        "2/4  先平均成 Ā",
+        "3/4  G(Ā,u) 出特征",
+        "4/4  似然看的是平均后的 y，而不是平均 log p"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "entropy_regularized_functional",
+      "hit": true,
+      "px": [
+        4123097,
+        4022595,
+        3904371,
+        4394910
+      ],
+      "diffs": [
+        100502,
+        118224,
+        490539
+      ],
+      "min_diff": 100502,
+      "slider_delta": 21227,
+      "caption": [
+        "1/4  似然项：预测误差柱",
+        "2/4  负熵项：粒子云发散度",
+        "3/4  两者相加为 L_ER",
+        "4/4  无负熵时粒子散开，图变糊"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "functional_perturbation",
+      "hit": true,
+      "px": [
+        3847247,
+        3863504,
+        4368552,
+        4593978
+      ],
+      "diffs": [
+        16257,
+        505048,
+        225426
+      ],
+      "min_diff": 16257,
+      "slider_delta": 312377,
+      "caption": [
+        "1/4  当前粒子",
+        "2/4  沿 φ 挪一小步",
+        "3/4  似然项变化（箭头对齐 ∇log p）",
+        "4/4  体积项 log|det|：散开或聚拢改变熵"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "rkhs_perturbation_direction",
+      "hit": true,
+      "px": [
+        3702744,
+        3826880,
+        3917558,
+        4084889
+      ],
+      "diffs": [
+        124136,
+        90678,
+        167331
+      ],
+      "min_diff": 90678,
+      "slider_delta": 815972,
+      "caption": [
+        "1/4  似然梯度贴在每个粒子上",
+        "2/4  核把梯度播给邻居",
+        "3/4  ∇K 项提供排斥/吸引",
+        "4/4  合成 φ_RKHS 在三角形里流动"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "kl_descent_sufficient_condition",
+      "hit": true,
+      "px": [
+        3840540,
+        3870607,
+        3808534,
+        4050274
+      ],
+      "diffs": [
+        30067,
+        62073,
+        241740
+      ],
+      "min_diff": 30067,
+      "slider_delta": 2816,
+      "caption": [
+        "1/4  画出得分差向量场",
+        "2/4  当前 φ 与它对齐则内积>0",
+        "3/4  KL 曲线下降",
+        "4/4  若故意反向 φ，KL 上升"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "entropy_bregman_potential",
+      "hit": true,
+      "px": [
+        3457226,
+        3637885,
+        3645364,
+        4134559
+      ],
+      "diffs": [
+        180659,
+        7479,
+        489195
+      ],
+      "min_diff": 7479,
+      "slider_delta": 3683,
+      "caption": [
+        "1/4  三角形可行域",
+        "2/4  势在中心低、在边上高",
+        "3/4  对比二次势会穿出边界",
+        "4/4  熵势把边界变成墙"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "entropy_bregman_divergence",
+      "hit": true,
+      "px": [
+        3255764,
+        3410753,
+        3350655,
+        3459281
+      ],
+      "diffs": [
+        154989,
+        60098,
+        108626
+      ],
+      "min_diff": 60098,
+      "slider_delta": 2994,
+      "caption": [
+        "1/4  参考点 α_τ",
+        "2/4  移动 α，竖直线段=Bregman",
+        "3/4  在单纯形上它等于 KL",
+        "4/4  离开单纯形则多出质量罚"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "mirror_map_log",
+      "hit": true,
+      "px": [
+        3113407,
+        5123718,
+        5038685,
+        5157290
+      ],
+      "diffs": [
+        2010311,
+        85033,
+        118605
+      ],
+      "min_diff": 85033,
+      "slider_delta": 36009,
+      "caption": [
+        "1/4  三角形里的点",
+        "2/4  log 映到 R^{K}",
+        "3/4  加上 εφ",
+        "4/4  softmax 拉回，仍在三角形"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "kems_simplex_update",
+      "hit": true,
+      "px": [
+        3824047,
+        3873544,
+        5110178,
+        3837957
+      ],
+      "diffs": [
+        49497,
+        1236634,
+        1272221
+      ],
+      "min_diff": 49497,
+      "slider_delta": 60249,
+      "caption": [
+        "1/4  粒子在三角形内",
+        "2/4  计算 φ_RKHS",
+        "3/4  对偶空间平移",
+        "4/4  拉回后仍在单纯形且更靠近最优行"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "forward_euler_ode",
+      "hit": true,
+      "px": [
+        5396054,
+        5411513,
+        5540201,
+        5471140
+      ],
+      "diffs": [
+        15459,
+        128688,
+        69061
+      ],
+      "min_diff": 15459,
+      "slider_delta": 26478,
+      "caption": [
+        "1/4  对偶空间连续曲线",
+        "2/4  欧拉折线逼近",
+        "3/4  ε 大则折线偏离并可能振荡",
+        "4/4  对应 KEMS 的离散步"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "embed_layer",
+      "hit": true,
+      "px": [
+        3659429,
+        3588799,
+        3757356,
+        4008851
+      ],
+      "diffs": [
+        70630,
+        168557,
+        251495
+      ],
+      "min_diff": 70630,
+      "slider_delta": 101032,
+      "caption": [
+        "1/4  原始标量/向量 x",
+        "2/4  乘矩阵 W 加偏置",
+        "3/4  得到更高维 g_embed",
+        "4/4  多个粒子 → 多份嵌入"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "nam_message_average",
+      "hit": true,
+      "px": [
+        4066487,
+        3745112,
+        3989217,
+        4527159
+      ],
+      "diffs": [
+        321375,
+        244105,
+        537942
+      ],
+      "min_diff": 244105,
+      "slider_delta": 323258,
+      "caption": [
+        "1/4  M 张不同的 A_l",
+        "2/4  各自做 g @ A",
+        "3/4  再对 l 平均",
+        "4/4  得到一条稳健的消息特征"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "residual_feature_update",
+      "hit": true,
+      "px": [
+        3312576,
+        3325016,
+        3700369,
+        3948717
+      ],
+      "diffs": [
+        12440,
+        375353,
+        248348
+      ],
+      "min_diff": 12440,
+      "slider_delta": 162815,
+      "caption": [
+        "1/4  底部分支：x 的线性恒等",
+        "2/4  上部分支：图消息",
+        "3/4  相加",
+        "4/4  消掉消息时输出仍像 x 的变换"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    },
+    {
+      "id": "relu_mlp_decoder",
+      "hit": true,
+      "px": [
+        3441104,
+        3359561,
+        3494041,
+        3525507
+      ],
+      "diffs": [
+        81543,
+        134480,
+        31466
+      ],
+      "min_diff": 31466,
+      "slider_delta": 18992,
+      "caption": [
+        "1/4  一维折线：ReLU 组合逼近曲线",
+        "2/4  加层，折点变多",
+        "3/4  输出 ŷ 跟踪目标 y",
+        "4/4  对比纯线性：弯不过去"
+      ],
+      "console": [],
+      "blank": false,
+      "canvas_err": ""
+    }
+  ],
+  "missing_anims": [],
+  "js_exceptions": [
+    "missing ) after argument list"
+  ],
+  "console_errors": [],
+  "phase_weak": [],
+  "slider_weak": [],
+  "blank": [],
+  "ok": [
+    "mpnn_message",
+    "mpnn_update",
+    "nam_normalize",
+    "simplex_factorization",
+    "dirichlet_entropy",
+    "implicit_likelihood",
+    "entropy_regularized_functional",
+    "functional_perturbation",
+    "rkhs_perturbation_direction",
+    "kl_descent_sufficient_condition",
+    "entropy_bregman_potential",
+    "entropy_bregman_divergence",
+    "mirror_map_log",
+    "kems_simplex_update",
+    "forward_euler_ode",
+    "embed_layer",
+    "nam_message_average",
+    "residual_feature_update",
+    "relu_mlp_decoder"
+  ],
+  "light_nonempty": true
+}

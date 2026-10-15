@@ -1,0 +1,1883 @@
+{
+  "round": 3,
+  "n_ops": 38,
+  "pages": [
+    {
+      "id": "latent_marginalization",
+      "name": "隐变量边缘化",
+      "hit": true,
+      "hasS": true,
+      "title": "隐变量边缘化",
+      "steps": 4,
+      "sliders": [
+        "mix"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3232082,
+          "nonempty": 48870,
+          "hash": -1417844146
+        },
+        {
+          "blank": false,
+          "px": 3749092,
+          "nonempty": 48870,
+          "hash": -1548807994
+        },
+        {
+          "blank": false,
+          "px": 4266490,
+          "nonempty": 48870,
+          "hash": 1020721328
+        },
+        {
+          "blank": false,
+          "px": 3767000,
+          "nonempty": 48870,
+          "hash": -8539380
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        130963848,
+        2569529322,
+        1029260708
+      ],
+      "phase_min_diff": 130963848,
+      "slider_ok": true,
+      "slider_diff": 2814382317,
+      "slider_px": 36049
+    },
+    {
+      "id": "latent_max_likelihood",
+      "name": "隐变量极大似然目标",
+      "hit": true,
+      "hasS": true,
+      "title": "隐变量极大似然目标",
+      "steps": 4,
+      "sliders": [
+        "beta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2921584,
+          "nonempty": 48870,
+          "hash": -434030022
+        },
+        {
+          "blank": false,
+          "px": 3062190,
+          "nonempty": 48870,
+          "hash": 1227555208
+        },
+        {
+          "blank": false,
+          "px": 2962507,
+          "nonempty": 48870,
+          "hash": 19663029
+        },
+        {
+          "blank": false,
+          "px": 3051129,
+          "nonempty": 48870,
+          "hash": -1492535527
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1661585230,
+        1207892179,
+        1512198556
+      ],
+      "phase_min_diff": 1207892179,
+      "slider_ok": true,
+      "slider_diff": 37749942,
+      "slider_px": 6780
+    },
+    {
+      "id": "jensen_inequality",
+      "name": "琴生不等式",
+      "hit": true,
+      "hasS": true,
+      "title": "琴生不等式",
+      "steps": 4,
+      "sliders": [
+        "tpos"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2874509,
+          "nonempty": 48870,
+          "hash": -70999711
+        },
+        {
+          "blank": false,
+          "px": 2907602,
+          "nonempty": 48870,
+          "hash": -1874992272
+        },
+        {
+          "blank": false,
+          "px": 2988932,
+          "nonempty": 48870,
+          "hash": -887090836
+        },
+        {
+          "blank": false,
+          "px": 3096160,
+          "nonempty": 48870,
+          "hash": 332590344
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1803992561,
+        987901436,
+        1219681180
+      ],
+      "phase_min_diff": 987901436,
+      "slider_ok": true,
+      "slider_diff": 1054514317,
+      "slider_px": 19759
+    },
+    {
+      "id": "elbo",
+      "name": "证据下界",
+      "hit": true,
+      "hasS": true,
+      "title": "证据下界",
+      "steps": 4,
+      "sliders": [
+        "beta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 4374547,
+          "nonempty": 48870,
+          "hash": 1573345683
+        },
+        {
+          "blank": false,
+          "px": 4407159,
+          "nonempty": 48870,
+          "hash": -1249105685
+        },
+        {
+          "blank": false,
+          "px": 4666850,
+          "nonempty": 48870,
+          "hash": -624286800
+        },
+        {
+          "blank": false,
+          "px": 4850796,
+          "nonempty": 48870,
+          "hash": -1624509848
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        2822451368,
+        624818885,
+        1000223048
+      ],
+      "phase_min_diff": 624818885,
+      "slider_ok": true,
+      "slider_diff": 2197741947,
+      "slider_px": 478665
+    },
+    {
+      "id": "kl_divergence",
+      "name": "KL散度",
+      "hit": true,
+      "hasS": true,
+      "title": "KL散度",
+      "steps": 4,
+      "sliders": [
+        "sep"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3928797,
+          "nonempty": 48870,
+          "hash": 194909515
+        },
+        {
+          "blank": false,
+          "px": 3869608,
+          "nonempty": 48870,
+          "hash": 759752658
+        },
+        {
+          "blank": false,
+          "px": 3890424,
+          "nonempty": 48870,
+          "hash": 1177732432
+        },
+        {
+          "blank": false,
+          "px": 3781058,
+          "nonempty": 48870,
+          "hash": 1364796186
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        564843143,
+        417979774,
+        187063754
+      ],
+      "phase_min_diff": 187063754,
+      "slider_ok": true,
+      "slider_diff": 1487235099,
+      "slider_px": 257921
+    },
+    {
+      "id": "variational_inference",
+      "name": "变分推断",
+      "hit": true,
+      "hasS": true,
+      "title": "变分推断",
+      "steps": 4,
+      "sliders": [
+        "rate"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 4224097,
+          "nonempty": 48870,
+          "hash": 1092151101
+        },
+        {
+          "blank": false,
+          "px": 3773607,
+          "nonempty": 48870,
+          "hash": -5735211
+        },
+        {
+          "blank": false,
+          "px": 3806310,
+          "nonempty": 48870,
+          "hash": -1365485074
+        },
+        {
+          "blank": false,
+          "px": 3743945,
+          "nonempty": 48870,
+          "hash": 2065388453
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1097886312,
+        1359749863,
+        3430873527
+      ],
+      "phase_min_diff": 1097886312,
+      "slider_ok": true,
+      "slider_diff": 994971028,
+      "slider_px": 71812
+    },
+    {
+      "id": "optimal_variational_distribution",
+      "name": "最优变分分布",
+      "hit": true,
+      "hasS": true,
+      "title": "最优变分分布",
+      "steps": 4,
+      "sliders": [
+        "rate"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 4104419,
+          "nonempty": 48870,
+          "hash": -1399146485
+        },
+        {
+          "blank": false,
+          "px": 3470459,
+          "nonempty": 48870,
+          "hash": 647999683
+        },
+        {
+          "blank": false,
+          "px": 3650720,
+          "nonempty": 48870,
+          "hash": 888968930
+        },
+        {
+          "blank": false,
+          "px": 3792059,
+          "nonempty": 48870,
+          "hash": 118493579
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        2047146168,
+        240969247,
+        770475351
+      ],
+      "phase_min_diff": 240969247,
+      "slider_ok": true,
+      "slider_diff": 715054978,
+      "slider_px": 4414
+    },
+    {
+      "id": "vbem",
+      "name": "变分贝叶斯EM算法",
+      "hit": true,
+      "hasS": true,
+      "title": "变分贝叶斯EM算法",
+      "steps": 4,
+      "sliders": [
+        "rate"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3402934,
+          "nonempty": 48870,
+          "hash": 628736392
+        },
+        {
+          "blank": false,
+          "px": 3365236,
+          "nonempty": 48870,
+          "hash": 186029654
+        },
+        {
+          "blank": false,
+          "px": 3323427,
+          "nonempty": 48870,
+          "hash": 1069667241
+        },
+        {
+          "blank": false,
+          "px": 3358614,
+          "nonempty": 48870,
+          "hash": -929285602
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        442706738,
+        883637587,
+        1998952843
+      ],
+      "phase_min_diff": 442706738,
+      "slider_ok": true,
+      "slider_diff": 817282300,
+      "slider_px": 24560
+    },
+    {
+      "id": "amortized_inference_network",
+      "name": "摊销推断网络",
+      "hit": true,
+      "hasS": true,
+      "title": "摊销推断网络",
+      "steps": 4,
+      "sliders": [
+        "beta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2764806,
+          "nonempty": 48870,
+          "hash": 174164836
+        },
+        {
+          "blank": false,
+          "px": 2983048,
+          "nonempty": 48870,
+          "hash": -94920804
+        },
+        {
+          "blank": false,
+          "px": 2961187,
+          "nonempty": 48870,
+          "hash": -1109702399
+        },
+        {
+          "blank": false,
+          "px": 2998817,
+          "nonempty": 48870,
+          "hash": -631221957
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        269085640,
+        1014781595,
+        478480442
+      ],
+      "phase_min_diff": 269085640,
+      "slider_ok": true,
+      "slider_diff": 192678048,
+      "slider_px": 106938
+    },
+    {
+      "id": "vae_objective",
+      "name": "VAE 目标（摊销ELBO）",
+      "hit": true,
+      "hasS": true,
+      "title": "VAE 目标（摊销ELBO）",
+      "steps": 4,
+      "sliders": [
+        "beta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3133407,
+          "nonempty": 48870,
+          "hash": 988067853
+        },
+        {
+          "blank": false,
+          "px": 3074343,
+          "nonempty": 48870,
+          "hash": 273903517
+        },
+        {
+          "blank": false,
+          "px": 3056949,
+          "nonempty": 48870,
+          "hash": -978419607
+        },
+        {
+          "blank": false,
+          "px": 3097700,
+          "nonempty": 48870,
+          "hash": 2058588740
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        714164336,
+        1252323124,
+        3037008347
+      ],
+      "phase_min_diff": 714164336,
+      "slider_ok": true,
+      "slider_diff": 331398924,
+      "slider_px": 97648
+    },
+    {
+      "id": "amortized_em",
+      "name": "摊销变分EM",
+      "hit": true,
+      "hasS": true,
+      "title": "摊销变分EM",
+      "steps": 4,
+      "sliders": [
+        "rate"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2831992,
+          "nonempty": 48870,
+          "hash": 1258585834
+        },
+        {
+          "blank": false,
+          "px": 2916065,
+          "nonempty": 48870,
+          "hash": -1471681
+        },
+        {
+          "blank": false,
+          "px": 2912437,
+          "nonempty": 48870,
+          "hash": 1455382801
+        },
+        {
+          "blank": false,
+          "px": 2911525,
+          "nonempty": 48870,
+          "hash": -1275625407
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1260057515,
+        1456854482,
+        2731008208
+      ],
+      "phase_min_diff": 1260057515,
+      "slider_ok": true,
+      "slider_diff": 1799624643,
+      "slider_px": 13113
+    },
+    {
+      "id": "euclidean_gradient_descent",
+      "name": "欧氏梯度下降",
+      "hit": true,
+      "hasS": true,
+      "title": "欧氏梯度下降",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2760751,
+          "nonempty": 48870,
+          "hash": 37946455
+        },
+        {
+          "blank": false,
+          "px": 2619201,
+          "nonempty": 48870,
+          "hash": -1119472265
+        },
+        {
+          "blank": false,
+          "px": 2609109,
+          "nonempty": 48870,
+          "hash": -1266373109
+        },
+        {
+          "blank": false,
+          "px": 2735034,
+          "nonempty": 48870,
+          "hash": 113713552
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1157418720,
+        146900844,
+        1380086661
+      ],
+      "phase_min_diff": 146900844,
+      "slider_ok": true,
+      "slider_diff": 503033941,
+      "slider_px": 2653
+    },
+    {
+      "id": "linearized_proximal_step",
+      "name": "线性化邻近步",
+      "hit": true,
+      "hasS": true,
+      "title": "线性化邻近步",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2859326,
+          "nonempty": 48870,
+          "hash": 192891836
+        },
+        {
+          "blank": false,
+          "px": 2912334,
+          "nonempty": 48870,
+          "hash": -658651760
+        },
+        {
+          "blank": false,
+          "px": 2963586,
+          "nonempty": 48870,
+          "hash": 269792632
+        },
+        {
+          "blank": false,
+          "px": 2991312,
+          "nonempty": 48870,
+          "hash": -1075401464
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        851543596,
+        928444392,
+        1345194096
+      ],
+      "phase_min_diff": 851543596,
+      "slider_ok": true,
+      "slider_diff": 2918405272,
+      "slider_px": 62116
+    },
+    {
+      "id": "bregman_potential",
+      "name": "布雷格曼势",
+      "hit": true,
+      "hasS": true,
+      "title": "布雷格曼势",
+      "steps": 4,
+      "sliders": [
+        "z0"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2828412,
+          "nonempty": 48870,
+          "hash": 976664542
+        },
+        {
+          "blank": false,
+          "px": 2912067,
+          "nonempty": 48870,
+          "hash": 2034646105
+        },
+        {
+          "blank": false,
+          "px": 2873122,
+          "nonempty": 48870,
+          "hash": -1339373058
+        },
+        {
+          "blank": false,
+          "px": 2934177,
+          "nonempty": 48870,
+          "hash": 1974743721
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1057981563,
+        3374019163,
+        3314116779
+      ],
+      "phase_min_diff": 1057981563,
+      "slider_ok": true,
+      "slider_diff": 517510033,
+      "slider_px": 1577
+    },
+    {
+      "id": "bregman_proximal_step",
+      "name": "布雷格曼邻近步",
+      "hit": true,
+      "hasS": true,
+      "title": "布雷格曼邻近步",
+      "steps": 4,
+      "sliders": [
+        "eta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2667301,
+          "nonempty": 48870,
+          "hash": 322342647
+        },
+        {
+          "blank": false,
+          "px": 2748262,
+          "nonempty": 48870,
+          "hash": 735222568
+        },
+        {
+          "blank": false,
+          "px": 2738690,
+          "nonempty": 48870,
+          "hash": 1198604528
+        },
+        {
+          "blank": false,
+          "px": 2760528,
+          "nonempty": 48870,
+          "hash": -1504012328
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        412879921,
+        463381960,
+        2702616856
+      ],
+      "phase_min_diff": 412879921,
+      "slider_ok": true,
+      "slider_diff": 543280073,
+      "slider_px": 26097
+    },
+    {
+      "id": "bregman_divergence",
+      "name": "布雷格曼散度",
+      "hit": true,
+      "hasS": true,
+      "title": "布雷格曼散度",
+      "steps": 4,
+      "sliders": [
+        "z0"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2883256,
+          "nonempty": 48870,
+          "hash": -720248360
+        },
+        {
+          "blank": false,
+          "px": 2879673,
+          "nonempty": 48870,
+          "hash": 2057438553
+        },
+        {
+          "blank": false,
+          "px": 2930428,
+          "nonempty": 48870,
+          "hash": 1188401164
+        },
+        {
+          "blank": false,
+          "px": 2911289,
+          "nonempty": 48870,
+          "hash": -1291576023
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        2777686913,
+        869037389,
+        2479977187
+      ],
+      "phase_min_diff": 869037389,
+      "slider_ok": true,
+      "slider_diff": 1391354911,
+      "slider_px": 19147
+    },
+    {
+      "id": "fenchel_conjugate",
+      "name": "芬克尔共轭",
+      "hit": true,
+      "hasS": true,
+      "title": "芬克尔共轭",
+      "steps": 4,
+      "sliders": [
+        "z0"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3090386,
+          "nonempty": 48870,
+          "hash": -2047394186
+        },
+        {
+          "blank": false,
+          "px": 2902459,
+          "nonempty": 48870,
+          "hash": 1793933987
+        },
+        {
+          "blank": false,
+          "px": 2971211,
+          "nonempty": 48870,
+          "hash": -1294036407
+        },
+        {
+          "blank": false,
+          "px": 3041317,
+          "nonempty": 48870,
+          "hash": -558476441
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        3841328173,
+        3087970394,
+        735559966
+      ],
+      "phase_min_diff": 735559966,
+      "slider_ok": true,
+      "slider_diff": 2237999,
+      "slider_px": 51075
+    },
+    {
+      "id": "mirror_map",
+      "name": "镜像映射",
+      "hit": true,
+      "hasS": true,
+      "title": "镜像映射",
+      "steps": 4,
+      "sliders": [
+        "eta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2784042,
+          "nonempty": 48870,
+          "hash": 645915318
+        },
+        {
+          "blank": false,
+          "px": 2842828,
+          "nonempty": 48870,
+          "hash": -472522430
+        },
+        {
+          "blank": false,
+          "px": 2917281,
+          "nonempty": 48870,
+          "hash": -405489057
+        },
+        {
+          "blank": false,
+          "px": 2888783,
+          "nonempty": 48870,
+          "hash": -591350493
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1118437748,
+        67033373,
+        185861436
+      ],
+      "phase_min_diff": 67033373,
+      "slider_ok": true,
+      "slider_diff": 1218552267,
+      "slider_px": 661
+    },
+    {
+      "id": "mirror_descent",
+      "name": "镜像下降",
+      "hit": true,
+      "hasS": true,
+      "title": "镜像下降",
+      "steps": 4,
+      "sliders": [
+        "eta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2659713,
+          "nonempty": 48870,
+          "hash": 1968056301
+        },
+        {
+          "blank": false,
+          "px": 2699351,
+          "nonempty": 48870,
+          "hash": 1935634989
+        },
+        {
+          "blank": false,
+          "px": 2676320,
+          "nonempty": 48870,
+          "hash": 519836150
+        },
+        {
+          "blank": false,
+          "px": 2757768,
+          "nonempty": 48870,
+          "hash": 1639337432
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        32421312,
+        1415798839,
+        1119501282
+      ],
+      "phase_min_diff": 32421312,
+      "slider_ok": true,
+      "slider_diff": 509370457,
+      "slider_px": 31867
+    },
+    {
+      "id": "mirror_descent_three_steps",
+      "name": "镜像下降三步分解",
+      "hit": true,
+      "hasS": true,
+      "title": "镜像下降三步分解",
+      "steps": 4,
+      "sliders": [
+        "eta"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3019480,
+          "nonempty": 48870,
+          "hash": 45470440
+        },
+        {
+          "blank": false,
+          "px": 3026895,
+          "nonempty": 48870,
+          "hash": 1030197689
+        },
+        {
+          "blank": false,
+          "px": 3013956,
+          "nonempty": 48870,
+          "hash": 169667568
+        },
+        {
+          "blank": false,
+          "px": 3060908,
+          "nonempty": 48870,
+          "hash": 1111293276
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        984727249,
+        860530121,
+        941625708
+      ],
+      "phase_min_diff": 860530121,
+      "slider_ok": true,
+      "slider_diff": 3146187501,
+      "slider_px": 2305
+    },
+    {
+      "id": "wasserstein_space_p2",
+      "name": "沃瑟斯坦空间 P2",
+      "hit": true,
+      "hasS": true,
+      "title": "沃瑟斯坦空间 P2",
+      "steps": 4,
+      "sliders": [
+        "sep"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3341935,
+          "nonempty": 48870,
+          "hash": -1774631373
+        },
+        {
+          "blank": false,
+          "px": 3263788,
+          "nonempty": 48870,
+          "hash": -2112262026
+        },
+        {
+          "blank": false,
+          "px": 3357948,
+          "nonempty": 48870,
+          "hash": 1888820668
+        },
+        {
+          "blank": false,
+          "px": 3359644,
+          "nonempty": 48870,
+          "hash": 1668545160
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        337630653,
+        4001082694,
+        220275508
+      ],
+      "phase_min_diff": 220275508,
+      "slider_ok": true,
+      "slider_diff": 3226400845,
+      "slider_px": 169509
+    },
+    {
+      "id": "normalization_constraint",
+      "name": "归一化约束",
+      "hit": true,
+      "hasS": true,
+      "title": "归一化约束",
+      "steps": 4,
+      "sliders": [
+        "spread"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 4841408,
+          "nonempty": 48870,
+          "hash": 908191318
+        },
+        {
+          "blank": false,
+          "px": 4619530,
+          "nonempty": 48870,
+          "hash": 1198909714
+        },
+        {
+          "blank": false,
+          "px": 4112057,
+          "nonempty": 48870,
+          "hash": 157588537
+        },
+        {
+          "blank": false,
+          "px": 4117303,
+          "nonempty": 48870,
+          "hash": -1599574997
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        290718396,
+        1041321177,
+        1757163534
+      ],
+      "phase_min_diff": 290718396,
+      "slider_ok": true,
+      "slider_diff": 1893026377,
+      "slider_px": 79179
+    },
+    {
+      "id": "transport_map",
+      "name": "传输映射（微扰）",
+      "hit": true,
+      "hasS": true,
+      "title": "传输映射（微扰）",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3992205,
+          "nonempty": 48870,
+          "hash": -738150467
+        },
+        {
+          "blank": false,
+          "px": 2837935,
+          "nonempty": 48870,
+          "hash": -871541449
+        },
+        {
+          "blank": false,
+          "px": 4589134,
+          "nonempty": 48870,
+          "hash": -276904234
+        },
+        {
+          "blank": false,
+          "px": 4686161,
+          "nonempty": 48870,
+          "hash": 170421331
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        133390982,
+        594637215,
+        447325565
+      ],
+      "phase_min_diff": 133390982,
+      "slider_ok": true,
+      "slider_diff": 1875689436,
+      "slider_px": 212632
+    },
+    {
+      "id": "change_of_variables_density",
+      "name": "变换后密度关系",
+      "hit": true,
+      "hasS": true,
+      "title": "变换后密度关系",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2972922,
+          "nonempty": 48870,
+          "hash": -1488066954
+        },
+        {
+          "blank": false,
+          "px": 3096365,
+          "nonempty": 48870,
+          "hash": 341145945
+        },
+        {
+          "blank": false,
+          "px": 2983365,
+          "nonempty": 48870,
+          "hash": -783843793
+        },
+        {
+          "blank": false,
+          "px": 3075542,
+          "nonempty": 48870,
+          "hash": 1029786942
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1829212899,
+        1124989738,
+        1813630735
+      ],
+      "phase_min_diff": 1124989738,
+      "slider_ok": true,
+      "slider_diff": 937367926,
+      "slider_px": 27772
+    },
+    {
+      "id": "log_density_first_order_expansion",
+      "name": "对数密度一阶展开",
+      "hit": true,
+      "hasS": true,
+      "title": "对数密度一阶展开",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2818514,
+          "nonempty": 48870,
+          "hash": 724790488
+        },
+        {
+          "blank": false,
+          "px": 2927233,
+          "nonempty": 48870,
+          "hash": -1622174661
+        },
+        {
+          "blank": false,
+          "px": 3017868,
+          "nonempty": 48870,
+          "hash": -597993604
+        },
+        {
+          "blank": false,
+          "px": 3276459,
+          "nonempty": 48870,
+          "hash": -310578761
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        2346965149,
+        1024181057,
+        287414843
+      ],
+      "phase_min_diff": 287414843,
+      "slider_ok": true,
+      "slider_diff": 791443208,
+      "slider_px": 33756
+    },
+    {
+      "id": "continuity_equation",
+      "name": "连续性方程（引理2.1）",
+      "hit": true,
+      "hasS": true,
+      "title": "连续性方程（引理2.1）",
+      "steps": 4,
+      "sliders": [
+        "vx"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3770792,
+          "nonempty": 48870,
+          "hash": 448189060
+        },
+        {
+          "blank": false,
+          "px": 3420230,
+          "nonempty": 48870,
+          "hash": 1957945060
+        },
+        {
+          "blank": false,
+          "px": 3460363,
+          "nonempty": 48870,
+          "hash": -868204355
+        },
+        {
+          "blank": false,
+          "px": 3519143,
+          "nonempty": 48870,
+          "hash": -736172291
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1509756000,
+        2826149415,
+        132032064
+      ],
+      "phase_min_diff": 132032064,
+      "slider_ok": true,
+      "slider_diff": 1359389067,
+      "slider_px": 21433
+    },
+    {
+      "id": "pushforward_measure",
+      "name": "推进测度",
+      "hit": true,
+      "hasS": true,
+      "title": "推进测度",
+      "steps": 4,
+      "sliders": [
+        "eps"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3455370,
+          "nonempty": 48870,
+          "hash": 395274384
+        },
+        {
+          "blank": false,
+          "px": 3589408,
+          "nonempty": 48870,
+          "hash": 1974535376
+        },
+        {
+          "blank": false,
+          "px": 3687501,
+          "nonempty": 48870,
+          "hash": 1533490609
+        },
+        {
+          "blank": false,
+          "px": 3833978,
+          "nonempty": 48870,
+          "hash": 554072038
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1579260992,
+        441044767,
+        979418571
+      ],
+      "phase_min_diff": 441044767,
+      "slider_ok": true,
+      "slider_diff": 2100859375,
+      "slider_px": 243027
+    },
+    {
+      "id": "w2_distance",
+      "name": "2-沃瑟斯坦距离",
+      "hit": true,
+      "hasS": true,
+      "title": "2-沃瑟斯坦距离",
+      "steps": 4,
+      "sliders": [
+        "sep"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2878261,
+          "nonempty": 48870,
+          "hash": -345141667
+        },
+        {
+          "blank": false,
+          "px": 2905685,
+          "nonempty": 48870,
+          "hash": 838585117
+        },
+        {
+          "blank": false,
+          "px": 2971585,
+          "nonempty": 48870,
+          "hash": 1988796749
+        },
+        {
+          "blank": false,
+          "px": 3064497,
+          "nonempty": 48870,
+          "hash": 1910900699
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1183726784,
+        1150211632,
+        77896050
+      ],
+      "phase_min_diff": 77896050,
+      "slider_ok": true,
+      "slider_diff": 1424456802,
+      "slider_px": 56144
+    },
+    {
+      "id": "w2_perturbative_form",
+      "name": "W₂ 微扰形式",
+      "hit": true,
+      "hasS": true,
+      "title": "W₂ 微扰形式",
+      "steps": 4,
+      "sliders": [
+        "sep"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2865802,
+          "nonempty": 48870,
+          "hash": -1943847676
+        },
+        {
+          "blank": false,
+          "px": 2841900,
+          "nonempty": 48870,
+          "hash": 1484963188
+        },
+        {
+          "blank": false,
+          "px": 2881894,
+          "nonempty": 48870,
+          "hash": 499949152
+        },
+        {
+          "blank": false,
+          "px": 2886204,
+          "nonempty": 48870,
+          "hash": -2113274748
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        3428810864,
+        985014036,
+        2613223900
+      ],
+      "phase_min_diff": 985014036,
+      "slider_ok": true,
+      "slider_diff": 1583545123,
+      "slider_px": 163063
+    },
+    {
+      "id": "state_ode",
+      "name": "受控状态方程",
+      "hit": true,
+      "hasS": true,
+      "title": "受控状态方程",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2888976,
+          "nonempty": 48870,
+          "hash": 1968327046
+        },
+        {
+          "blank": false,
+          "px": 2974322,
+          "nonempty": 48870,
+          "hash": -756712434
+        },
+        {
+          "blank": false,
+          "px": 3093483,
+          "nonempty": 48870,
+          "hash": 1644968939
+        },
+        {
+          "blank": false,
+          "px": 2840167,
+          "nonempty": 48870,
+          "hash": -182343591
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        2725039480,
+        2401681373,
+        1827312530
+      ],
+      "phase_min_diff": 1827312530,
+      "slider_ok": true,
+      "slider_diff": 2005314988,
+      "slider_px": 59686
+    },
+    {
+      "id": "performance_functional",
+      "name": "性能泛函",
+      "hit": true,
+      "hasS": true,
+      "title": "性能泛函",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2814690,
+          "nonempty": 48870,
+          "hash": 670964052
+        },
+        {
+          "blank": false,
+          "px": 2957516,
+          "nonempty": 48870,
+          "hash": 1067128404
+        },
+        {
+          "blank": false,
+          "px": 2997751,
+          "nonempty": 48870,
+          "hash": 549998029
+        },
+        {
+          "blank": false,
+          "px": 3004982,
+          "nonempty": 48870,
+          "hash": -2078270934
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        396164352,
+        517130375,
+        2628268963
+      ],
+      "phase_min_diff": 396164352,
+      "slider_ok": true,
+      "slider_diff": 137012844,
+      "slider_px": 198890
+    },
+    {
+      "id": "hamiltonian_pmp",
+      "name": "哈密顿量（PMP一般形式）",
+      "hit": true,
+      "hasS": true,
+      "title": "哈密顿量（PMP一般形式）",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2868503,
+          "nonempty": 48870,
+          "hash": 619256845
+        },
+        {
+          "blank": false,
+          "px": 3270410,
+          "nonempty": 48870,
+          "hash": 1857958596
+        },
+        {
+          "blank": false,
+          "px": 2785698,
+          "nonempty": 48870,
+          "hash": -1772979944
+        },
+        {
+          "blank": false,
+          "px": 3018825,
+          "nonempty": 48870,
+          "hash": -2042932491
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1238701751,
+        3630938540,
+        269952547
+      ],
+      "phase_min_diff": 269952547,
+      "slider_ok": true,
+      "slider_diff": 395312638,
+      "slider_px": 16228
+    },
+    {
+      "id": "adjoint_state_pmp",
+      "name": "伴随态",
+      "hit": true,
+      "hasS": true,
+      "title": "伴随态",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2758002,
+          "nonempty": 48870,
+          "hash": -585340454
+        },
+        {
+          "blank": false,
+          "px": 2798285,
+          "nonempty": 48870,
+          "hash": -2084105013
+        },
+        {
+          "blank": false,
+          "px": 2904310,
+          "nonempty": 48870,
+          "hash": -248969304
+        },
+        {
+          "blank": false,
+          "px": 3003227,
+          "nonempty": 48870,
+          "hash": 744192029
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1498764559,
+        1835135709,
+        993161333
+      ],
+      "phase_min_diff": 993161333,
+      "slider_ok": true,
+      "slider_diff": 246533149,
+      "slider_px": 2029
+    },
+    {
+      "id": "pmp_stationarity",
+      "name": "极大值条件",
+      "hit": true,
+      "hasS": true,
+      "title": "极大值条件",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2743593,
+          "nonempty": 48870,
+          "hash": -1544638149
+        },
+        {
+          "blank": false,
+          "px": 2802429,
+          "nonempty": 48870,
+          "hash": -903150627
+        },
+        {
+          "blank": false,
+          "px": 2859434,
+          "nonempty": 48870,
+          "hash": -2106251288
+        },
+        {
+          "blank": false,
+          "px": 2948125,
+          "nonempty": 48870,
+          "hash": 1631710211
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        641487522,
+        1203100661,
+        3737961499
+      ],
+      "phase_min_diff": 641487522,
+      "slider_ok": true,
+      "slider_diff": 3810128298,
+      "slider_px": 5750
+    },
+    {
+      "id": "pmp_state_equation",
+      "name": "PMP 状态方程",
+      "hit": true,
+      "hasS": true,
+      "title": "PMP 状态方程",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2712072,
+          "nonempty": 48870,
+          "hash": 965610206
+        },
+        {
+          "blank": false,
+          "px": 2765020,
+          "nonempty": 48870,
+          "hash": -964546502
+        },
+        {
+          "blank": false,
+          "px": 2784910,
+          "nonempty": 48870,
+          "hash": -364260724
+        },
+        {
+          "blank": false,
+          "px": 2766635,
+          "nonempty": 48870,
+          "hash": -1046431887
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1930156708,
+        600285778,
+        682171163
+      ],
+      "phase_min_diff": 600285778,
+      "slider_ok": true,
+      "slider_diff": 457310114,
+      "slider_px": 2058
+    },
+    {
+      "id": "pmp_adjoint_equation",
+      "name": "PMP 伴随方程",
+      "hit": true,
+      "hasS": true,
+      "title": "PMP 伴随方程",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3486791,
+          "nonempty": 48870,
+          "hash": -1421338341
+        },
+        {
+          "blank": false,
+          "px": 3454139,
+          "nonempty": 48870,
+          "hash": 1611820053
+        },
+        {
+          "blank": false,
+          "px": 4404322,
+          "nonempty": 48870,
+          "hash": -1081795990
+        },
+        {
+          "blank": false,
+          "px": 4387524,
+          "nonempty": 48870,
+          "hash": 241999660
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        3033158394,
+        2693616043,
+        1323795650
+      ],
+      "phase_min_diff": 1323795650,
+      "slider_ok": true,
+      "slider_diff": 1012666634,
+      "slider_px": 874202
+    },
+    {
+      "id": "pmp_boundary_condition",
+      "name": "PMP 边界条件",
+      "hit": true,
+      "hasS": true,
+      "title": "PMP 边界条件",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 2829982,
+          "nonempty": 48870,
+          "hash": -1146292204
+        },
+        {
+          "blank": false,
+          "px": 2911642,
+          "nonempty": 48870,
+          "hash": 515620082
+        },
+        {
+          "blank": false,
+          "px": 2970787,
+          "nonempty": 48870,
+          "hash": 465202795
+        },
+        {
+          "blank": false,
+          "px": 2963695,
+          "nonempty": 48870,
+          "hash": 869124449
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        1661912286,
+        50417287,
+        403921654
+      ],
+      "phase_min_diff": 50417287,
+      "slider_ok": true,
+      "slider_diff": 76758874,
+      "slider_px": 17806
+    },
+    {
+      "id": "pontryagin_maximum_principle",
+      "name": "庞特里亚金极大值原理",
+      "hit": true,
+      "hasS": true,
+      "title": "庞特里亚金极大值原理",
+      "steps": 4,
+      "sliders": [
+        "uamp"
+      ],
+      "phases": [
+        {
+          "blank": false,
+          "px": 3260711,
+          "nonempty": 48870,
+          "hash": 1110058471
+        },
+        {
+          "blank": false,
+          "px": 3592830,
+          "nonempty": 48870,
+          "hash": 505814354
+        },
+        {
+          "blank": false,
+          "px": 3163226,
+          "nonempty": 48870,
+          "hash": -1778857078
+        },
+        {
+          "blank": false,
+          "px": 3671379,
+          "nonempty": 48870,
+          "hash": -1909219931
+        }
+      ],
+      "console": [],
+      "phase_hash_diffs": [
+        604244117,
+        2284671432,
+        130362853
+      ],
+      "phase_min_diff": 130362853,
+      "slider_ok": true,
+      "slider_diff": 307009649,
+      "slider_px": 7201
+    }
+  ],
+  "missing_anim": [],
+  "js_exceptions": [],
+  "console_errors": [],
+  "blank": [],
+  "phase_weak": [],
+  "slider_weak": [],
+  "ok": [
+    "latent_marginalization",
+    "latent_max_likelihood",
+    "jensen_inequality",
+    "elbo",
+    "kl_divergence",
+    "variational_inference",
+    "optimal_variational_distribution",
+    "vbem",
+    "amortized_inference_network",
+    "vae_objective",
+    "amortized_em",
+    "euclidean_gradient_descent",
+    "linearized_proximal_step",
+    "bregman_potential",
+    "bregman_proximal_step",
+    "bregman_divergence",
+    "fenchel_conjugate",
+    "mirror_map",
+    "mirror_descent",
+    "mirror_descent_three_steps",
+    "wasserstein_space_p2",
+    "normalization_constraint",
+    "transport_map",
+    "change_of_variables_density",
+    "log_density_first_order_expansion",
+    "continuity_equation",
+    "pushforward_measure",
+    "w2_distance",
+    "w2_perturbative_form",
+    "state_ode",
+    "performance_functional",
+    "hamiltonian_pmp",
+    "adjoint_state_pmp",
+    "pmp_stationarity",
+    "pmp_state_equation",
+    "pmp_adjoint_equation",
+    "pmp_boundary_condition",
+    "pontryagin_maximum_principle"
+  ],
+  "ignored_boot_errors": [
+    "missing ) after argument list"
+  ],
+  "registered": [
+    "latent_marginalization",
+    "latent_max_likelihood",
+    "jensen_inequality",
+    "elbo",
+    "kl_divergence",
+    "variational_inference",
+    "optimal_variational_distribution",
+    "vbem",
+    "amortized_inference_network",
+    "vae_objective",
+    "amortized_em",
+    "euclidean_gradient_descent",
+    "linearized_proximal_step",
+    "bregman_potential",
+    "bregman_proximal_step",
+    "bregman_divergence",
+    "fenchel_conjugate",
+    "mirror_map",
+    "mirror_descent",
+    "mirror_descent_three_steps",
+    "wasserstein_space_p2",
+    "normalization_constraint",
+    "transport_map",
+    "change_of_variables_density",
+    "log_density_first_order_expansion",
+    "continuity_equation",
+    "pushforward_measure",
+    "w2_distance",
+    "w2_perturbative_form",
+    "state_ode",
+    "performance_functional",
+    "hamiltonian_pmp",
+    "adjoint_state_pmp",
+    "pmp_stationarity",
+    "pmp_state_equation",
+    "pmp_adjoint_equation",
+    "pmp_boundary_condition",
+    "pontryagin_maximum_principle"
+  ],
+  "registered_n": 38,
+  "light_ok": true
+}

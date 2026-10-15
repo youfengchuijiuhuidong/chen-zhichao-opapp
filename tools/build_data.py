@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""Parse mindmap.html, merge pedagogical extras, write operators.json and js/data.js."""
+from __future__ import annotations
+
+import json
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+APP = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from bib import BIB
+from extras_ch2 import CH2
+from extras_ch34 import CH34
+from extras_ch56 import CH56
+from extras_ch7 import CH7
+
+EXTRAS = {**CH2, **CH34, **CH56, **CH7}
+
+CH_META = {
+    2: {"id": "ch2", "title": "第2章 预备知识", "color": "#5b8cff", "blurb": "PLVM、变分、镜像下降、W₂ 几何、庞特里亚金原理"},
+    3: {"id": "ch3", "title": "第3章 补全·负熵", "color": "#2dd4bf", "blurb": "缺失数据、NER、最小移动、KnewImp"},
+    4: {"id": "ch4", "title": "第4章 稳态·InfO", "color": "#a3e635", "blurb": "粒子量子化、无穷时域最优控制、InfO-EM"},
+    5: {"id": "ch5", "title": "第5章 镜像下降", "color": "#fbbf24", "blurb": "图网络、单纯形、KEMS、E²AG"},
+    6: {"id": "ch6", "title": "第6章 有限时域", "color": "#fb7185", "blurb": "SDE、Girsanov、OC-NDPLVM"},
+    7: {"id": "ch7", "title": "第7章 展望", "color": "#c084fc", "blurb": "预条件流、加速/动量、Fisher–Rao 传送、冷启动"},
+}
+
+
+def load_mindmap():
+    html = (ROOT / "mindmap.html").read_text(encoding="utf-8")
+    m = re.search(r'<script id="data" type="application/json">(.*?)</script>', html, re.S)
+    if not m:
+        raise SystemExit("cannot find #data JSON in mindmap.html")
+    return json.loads(m.group(1))
+
+
+def resolve_refs(keys):
+    out = []
+    for k in keys:
+        if k not in BIB:
+            raise SystemExit(f"unknown bib key: {k}")
+        item = dict(BIB[k])
+        item["key"] = k
+        out.append(item)
+    return out
+
+
+def layers(ops, edges):
+    by = {o["id"]: o for o in ops}
+    for o in ops:
+        o["_up"] = []
+        o["_dn"] = []
+    for e in edges:
+        if e["from"] in by and e["to"] in by:
+            by[e["to"]]["_up"].append(e["from"])
+            by[e["from"]]["_dn"].append(e["to"])
+    memo = {}
+
+    def dep(oid):
+        if oid in memo:
+            return memo[oid]
+        ups = by[oid]["_up"]
+        memo[oid] = (max((dep(u) for u in ups), default=-1) + 1) if ups else 0
+        return memo[oid]
+
+    for o in ops:
+        o["layer"] = dep(o["id"])
+
+
+def main():
+    D = load_mindmap()
+    raw_ops = D["operators"]
+    edges = D["edges"]
+    missing = [o["id"] for o in raw_ops if o["id"] not in EXTRAS]
+    extra_ids = [k for k in EXTRAS if k not in {o["id"] for o in raw_ops}]
+    if missing:
+        raise SystemExit(f"extras missing {len(missing)}: {missing}")
+    if extra_ids:
+        raise SystemExit(f"extras has unknown ids: {extra_ids}")
+
+    operators = []
+    for o in raw_ops:
+        x = EXTRAS[o["id"]]
+        item = {
+            "id": o["id"],
+            "name_zh": o["中文名"],
+            "name_en": o["英文名"],
+            "chapter": o["来源章"],
+            "ch": o["ch"],
+            "section": o.get("章节+公式号", ""),
+            "tag": o.get("标签", "明说"),
+            "definition": o.get("定义式", ""),
+            "io": o.get("输入/输出", ""),
+            "upstream": list(o.get("上游算子") or []),
+            "problem": o.get("解决什么问题", ""),
+            "origin": o.get("原始出处", ""),
+            "quote": o.get("原文摘录", ""),
+            "katex": x["katex"],
+            "intuition": x["intuition"],
+            "steps": x["steps"],
+            "pseudo": x["pseudo"],
+            "apps": x["apps"],
+            "pros": x["pros"],
+            "cons": x["cons"],
+            "demo": x["demo"],
+            "sliders": [{"id": a, "label": b, "min": c, "max": d, "value": e} for a, b, c, d, e in x.get("sliders") or []],
+            "refs": resolve_refs(x["refs"]),
+            "flag": o.get("flag"),
+            "def_expr_note": o.get("def_expr_note"),
+            "note": x.get("note"),
+            "same_id": o.get("同id另见") or [],
+        }
+        operators.append(item)
+
+    layers(operators, edges)
+    by = {o["id"]: o for o in operators}
+    for o in operators:
+        o["downstream"] = list(o.pop("_dn"))
+        o.pop("_up", None)
+
+    # sanity: every upstream exists
+    for o in operators:
+        for u in o["upstream"]:
+            if u not in by:
+                raise SystemExit(f"{o['id']} upstream missing {u}")
+
+    payload = {
+        "meta": {
+            **D["meta"],
+            "app": "算子谱系交互讲义",
+            "operator_count": len(operators),
+            "demo_types": sorted({o["demo"] for o in operators}),
+        },
+        "chapters": CH_META,
+        "operators": operators,
+        "edges": edges,
+        "splits": D.get("splits") or [],
+    }
+
+    out_json = APP / "data" / "operators.json"
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    js = APP / "js" / "data.js"
+    js.parent.mkdir(parents=True, exist_ok=True)
+    js.write_text(
+        "/* auto-generated by tools/build_data.py — do not edit */\n"
+        "window.OPDATA = " + json.dumps(payload, ensure_ascii=False) + ";\n",
+        encoding="utf-8",
+    )
+
+    from collections import Counter
+    c = Counter(o["ch"] for o in operators)
+    print(f"operators: {len(operators)}")
+    print("by ch:", dict(sorted(c.items())))
+    print("demo types:", len(payload["meta"]["demo_types"]), payload["meta"]["demo_types"])
+    print("wrote", out_json)
+    print("wrote", js)
+
+
+if __name__ == "__main__":
+    main()
