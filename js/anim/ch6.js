@@ -1016,12 +1016,13 @@
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(R.x, R.y); ctx.stroke();
         }
       }
-      // 高亮全局最优路径
+      // 虚线=全局最优（偷看未来）
       if (ph !== 1) {
         let idx = 0;
         let prev = pos(0, 0);
-        ctx.strokeStyle = T.c5;
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = T.mu;
+        ctx.lineWidth = 2.4;
+        ctx.setLineDash([7, 4]);
         ctx.beginPath();
         ctx.moveTo(prev.x, prev.y);
         for (let d = 0; d < 3; d++) {
@@ -1030,13 +1031,14 @@
           ctx.lineTo(p.x, p.y);
         }
         ctx.stroke();
+        ctx.setLineDash([]);
       }
-      // 局部贪心
+      // 实线=局部重规划
       if (ph >= 1) {
         let idx = 0;
-        ctx.strokeStyle = T.c3;
-        ctx.lineWidth = 2.4;
-        ctx.setLineDash(ph === 1 ? [] : [6, 4]);
+        ctx.strokeStyle = T.c5;
+        ctx.lineWidth = 2.6;
+        ctx.setLineDash([]);
         ctx.beginPath();
         const p0 = pos(0, 0);
         ctx.moveTo(p0.x, p0.y);
@@ -1046,7 +1048,6 @@
           ctx.lineTo(p.x, p.y);
         }
         ctx.stroke();
-        ctx.setLineDash([]);
       }
       for (let d = 0; d <= 3; d++) {
         for (let i = 0; i < 1 << d; i++) {
@@ -1071,7 +1072,20 @@
         ctx.font = FONTSM;
         ctx.fillText("在线软测量不能偷看未来 y：只能走黄/青绿的单步前瞻。", 16, 54);
       }
-      legend(ctx, [{ c: T.c5, t: "全局最优（偷看未来）" }, { c: T.c3, t: "单步前瞻（在线）" }], S.W - 168, 36, T);
+      // 底栏折线：虚线全局 z(t) vs 实线局部
+      if (r.bestZ && r.locZ) {
+        const bx = 16, by = S.H - 70, bw = S.W - 32, bh = 28;
+        const X = (i) => bx + bw * i / 3;
+        const Y = (z) => by + bh * 0.5 - z * 10;
+        ctx.setLineDash([5, 3]);
+        ctx.strokeStyle = T.mu; ctx.lineWidth = 1.6; ctx.beginPath();
+        r.bestZ.forEach((z, i) => { if (i) ctx.lineTo(X(i), Y(z)); else ctx.moveTo(X(i), Y(z)); });
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = T.c5; ctx.lineWidth = 2; ctx.beginPath();
+        r.locZ.forEach((z, i) => { if (i) ctx.lineTo(X(i), Y(z)); else ctx.moveTo(X(i), Y(z)); });
+        ctx.stroke();
+      }
+      legend(ctx, [{ c: T.mu, t: "虚线全局最优" }, { c: T.c5, t: "实线局部重规划" }], S.W - 176, 36, T);
     },
   });
 

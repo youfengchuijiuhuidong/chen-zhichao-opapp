@@ -5,10 +5,18 @@
   const TWO = Math.PI * 2;
   const FONT_STACK = global.OP_FONT_STACK || '"Noto Sans SC","Noto Sans CJK SC","WenQuanYi Micro Hei","WenQuanYi Zen Hei","Source Han Sans SC","Droid Sans Fallback","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif';
   global.OP_FONT_STACK = FONT_STACK;
-  const CHROME_H = 14; /* 底部播放条高度，专属动画内容应避开此带 */
+  const CHROME_H = 18; /* 底部播放条高度，专属动画内容应避开此带 */
+  const PHASE_SEC = 2.4;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   const lerp = (a, b, t) => a + (b - a) * t;
   const hypot = Math.hypot;
+  const SEM = {
+    state: "#5b8cff",
+    ctrl: "#fbbf24",
+    adj: "#c084fc",
+    energy: "#34d399",
+    base: "#8b98b5",
+  };
   function ensureCjkFont(ctx) {
     const f = ctx.font || "12px sans-serif";
     if (/Noto|WenQuanYi|Source Han|Droid Sans Fallback|PingFang|YaHei|Hiragino|OP_FONT/.test(f)) return;
@@ -45,6 +53,11 @@
       c6: css("--c6", "#fb7185"),
       c7: css("--c7", "#c084fc"),
       line: css("--line", "#243049"),
+      state: SEM.state,
+      ctrl: SEM.ctrl,
+      adj: SEM.adj,
+      energy: SEM.energy,
+      base: SEM.base,
     };
   }
 
@@ -52,6 +65,7 @@
     const captionEl = opts.captionEl;
     const metricsEl = opts.metricsEl;
     const stepsEl = opts.stepsEl;
+    const timelineEl = opts.timelineEl;
     const op = opts.operator;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const _fillText = ctx.fillText.bind(ctx);
@@ -88,10 +102,13 @@
       opId: op.id || "",
       opName: op.name || "",
       chromeH: CHROME_H,
+      phaseSec: PHASE_SEC,
+      cycleFrames: Math.max(1, (op.steps || ["演示"]).length) * 72,
     };
     let raf = 0;
     let last = 0;
     let dead = false;
+    let hiddenPause = false;
 
     function resize() {
       const r = canvas.getBoundingClientRect();
@@ -114,28 +131,46 @@
       S.t += dt;
       S.frame++;
       const n = S.steps.length || 1;
-      S.phase = Math.floor(S.t / 2.4) % n;
+      S.phase = Math.floor(S.t / S.phaseSec) % n;
+      S.cycleFrames = n * 72;
       try { impl.tick(S, dt); } catch (e) { S.metrics.err = String(e.message || e); }
     }
-    function drawChrome(ctx, S, T) {
-      /* 只画底部细进度条 + 2px 播放头，不再铺满竖带、不再叠标题 */
+    function syncTimeline() {
+      if (!timelineEl) return;
       const n = Math.max(1, S.steps.length);
-      const barH = 4;
-      const y = S.H - 7;
+      const cycle = n * S.phaseSec;
+      const pos = (S.t % cycle) / cycle;
+      const frac = (S.t / S.phaseSec) % 1;
+      if (!timelineEl.dataset.ready) {
+        timelineEl.innerHTML = S.steps.map((s, i) =>
+          `<button type="button" class="tl-phase" data-phase="${i}" title="${String(s).replace(/"/g, "&quot;")}">${i + 1}</button>`
+        ).join("") + `<div class="tl-fill"></div>`;
+        timelineEl.dataset.ready = "1";
+        timelineEl.style.setProperty("--n", String(n));
+      }
+      const fill = timelineEl.querySelector(".tl-fill");
+      if (fill) fill.style.width = (pos * 100).toFixed(2) + "%";
+      timelineEl.querySelectorAll(".tl-phase").forEach((b, i) => b.classList.toggle("on", i === S.phase));
+      timelineEl.setAttribute("aria-valuenow", String(S.phase + frac));
+    }
+    function drawChrome(ctx, S, T) {
+      const n = Math.max(1, S.steps.length);
+      const barH = 5;
+      const y = S.H - 9;
       const x0 = 10, W = S.W - 20;
       const w = W / n;
-      const frac = (S.t / 2.4) % 1;
+      const frac = (S.t / S.phaseSec) % 1;
       ctx.save();
       ctx.fillStyle = T.dark ? "rgba(11,18,32,0.72)" : "rgba(244,246,251,0.78)";
       ctx.fillRect(0, S.H - CHROME_H, S.W, CHROME_H);
       for (let i = 0; i < n; i++) {
-        ctx.fillStyle = i === S.phase ? T.c5 : (T.dark ? "#1c2740" : "#d5dced");
+        ctx.fillStyle = i === S.phase ? T.ctrl : (T.dark ? "#1c2740" : "#d5dced");
         ctx.fillRect(x0 + i * w, y, Math.max(1, w - 2), barH);
       }
-      ctx.fillStyle = T.c2;
+      ctx.fillStyle = T.state;
       ctx.fillRect(x0 + S.phase * w, y, Math.max(2, (w - 2) * frac), barH);
       const playX = x0 + S.phase * w + (w - 2) * frac;
-      ctx.fillStyle = T.c3;
+      ctx.fillStyle = T.energy;
       ctx.fillRect(playX - 1, y - 3, 2, barH + 6);
       ctx.restore();
     }
@@ -144,7 +179,7 @@
       const ph = ((S.phase % n) + n) % n;
       S.phase = ph;
       global.__CH3_FORCE_PHASE = ph;
-      global.__CH6_FORCE = { id: "*", phase: ph, frac: (S.t / 2.4) % 1 };
+      global.__CH6_FORCE = { id: "*", phase: ph, frac: (S.t / S.phaseSec) % 1 };
     }
     function expose() {
       global.__OP_PLAYER = {
@@ -158,10 +193,15 @@
           S.playing = false;
           const n = Math.max(1, S.steps.length);
           S.phase = ((p % n) + n) % n;
-          S.t = S.phase * 2.4 + 1.15;
+          S.t = S.phase * S.phaseSec + 1.15;
           syncForceFlags();
           try { impl.tick(S, 0.02); } catch (e) { S.metrics.err = String(e.message || e); }
           draw();
+        },
+        nextPhase() {
+          const n = Math.max(1, S.steps.length);
+          this.setPhase(S.phase + 1);
+          S.playing = false;
         },
         setSlider(k, v) {
           if (k === "speed") S.speed = v;
@@ -193,27 +233,63 @@
         const parts = Object.keys(S.metrics).map((k) => k + " " + (typeof S.metrics[k] === "number" ? S.metrics[k].toFixed(3) : S.metrics[k]));
         metricsEl.innerHTML = parts.map((p) => "<span>" + p + "</span>").join("");
       }
+      syncTimeline();
     }
     function loop(ts) {
       if (dead) return;
+      if (document.hidden) {
+        last = 0;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       if (!last) last = ts;
-      const dt = Math.min(0.05, (ts - last) / 1000) * S.speed;
+      const dt = Math.min(0.033, (ts - last) / 1000) * S.speed;
       last = ts;
       if (S.playing) tick(dt);
       draw();
       raf = requestAnimationFrame(loop);
     }
+    function onVis() {
+      if (document.hidden) {
+        hiddenPause = S.playing;
+        S.playing = false;
+        last = 0;
+      } else {
+        last = 0;
+        if (hiddenPause) S.playing = true;
+        hiddenPause = false;
+      }
+    }
     const ro = new ResizeObserver(() => resize());
     ro.observe(canvas);
     resize();
     expose();
+    document.addEventListener("visibilitychange", onVis);
     raf = requestAnimationFrame(loop);
 
     return {
-      play() { S.playing = true; },
-      pause() { S.playing = false; },
+      play() { S.playing = true; hiddenPause = false; },
+      pause() { S.playing = false; hiddenPause = false; },
       step() { S.playing = false; tick(0.08); draw(); },
-      reset() { S.t = 0; S.frame = 0; S.phase = 0; impl.init(S); draw(); },
+      nextPhase() {
+        const n = Math.max(1, S.steps.length);
+        S.playing = false;
+        S.phase = (S.phase + 1) % n;
+        S.t = S.phase * S.phaseSec;
+        syncForceFlags();
+        try { impl.tick(S, 0.02); } catch (e) { S.metrics.err = String(e.message || e); }
+        draw();
+      },
+      setPhase(p) {
+        S.playing = false;
+        const n = Math.max(1, S.steps.length);
+        S.phase = ((p % n) + n) % n;
+        S.t = S.phase * S.phaseSec;
+        syncForceFlags();
+        try { impl.tick(S, 0.02); } catch (e) { S.metrics.err = String(e.message || e); }
+        draw();
+      },
+      reset() { S.t = 0; S.frame = 0; S.phase = 0; impl.init(S); S.cycleFrames = Math.max(1, S.steps.length) * 72; draw(); },
       setParam(k, v) {
         if (k === "speed") {
           S.speed = v;
@@ -228,6 +304,7 @@
         dead = true;
         cancelAnimationFrame(raf);
         ro.disconnect();
+        document.removeEventListener("visibilitychange", onVis);
         if (global.__OP_PLAYER && global.__OP_PLAYER.S === S) global.__OP_PLAYER = null;
       },
     };
@@ -290,10 +367,21 @@
       ctx.closePath();
       ctx.fill();
     }
-    function label(ctx, text, x, y, T) {
+    function label(ctx, text, x, y, T, maxW) {
+      let px = 12;
       ctx.fillStyle = T.mu;
-      ctx.font = "12px " + FONT_STACK;
-      ctx.fillText(text, x, y);
+      ctx.font = px + "px " + FONT_STACK;
+      const cap = maxW != null ? maxW : 560;
+      while (px > 8 && ctx.measureText(text).width > cap) {
+        px -= 1;
+        ctx.font = px + "px " + FONT_STACK;
+      }
+      let t = String(text || "");
+      if (ctx.measureText(t).width > cap) {
+        while (t.length > 1 && ctx.measureText(t + "…").width > cap) t = t.slice(0, -1);
+        t += "…";
+      }
+      ctx.fillText(t, x, y);
     }
     function simplexXY(a, b, c, cx, cy, sc) {
       const x = cx + (b - a) * sc;
@@ -694,7 +782,11 @@
     });
 
     add(["entropy"], {
-      init(S) { S.sim.s = 0.25; S.sim.xs = []; },
+      init(S) {
+        S.sim.s = 0.25;
+        S.sim.z0 = Array.from({ length: 36 }, () => randn());
+        S.sim.xs = S.sim.z0.map((z) => S.sim.s * z);
+      },
       tick(S, dt) {
         const spread = S.sliders.spread != null ? S.sliders.spread : 0.7;
         const ner = /ner|negative_entropy|entropy_regularized|joint_ner/i.test(S.opId || "");
@@ -702,13 +794,13 @@
         const table = ner ? [1.35, 0.95, 0.45, 0.22] : [0.22, 0.55, 0.95, 1.35];
         const goal = 0.12 + spread * table[ph];
         S.sim.s += (goal - S.sim.s) * dt * 5.2;
-        S.sim.xs = Array.from({ length: 36 }, () => S.sim.s * randn());
+        S.sim.xs = S.sim.z0.map((z) => S.sim.s * z);
         S.metrics.H近似 = Math.log(S.sim.s * 2.5);
         S.metrics.方向 = ner ? "负熵收敛" : "熵发散";
       },
       draw(ctx, S, T) {
         const fn = (x) => gauss(x, 0, S.sim.s);
-        const m = plot1d(ctx, S.W, S.H, fn, T.c4);
+        const m = plot1d(ctx, S.W, S.H, fn, T.state);
         ctx.beginPath();
         ctx.moveTo(m.mapX(-3), m.y1);
         for (let i = 0; i <= 80; i++) {
@@ -717,71 +809,116 @@
         }
         ctx.lineTo(m.mapX(3), m.y1);
         ctx.closePath();
-        ctx.fillStyle = "rgba(163,230,53,.22)";
+        ctx.fillStyle = "rgba(91,140,255,.22)";
         ctx.fill();
         (S.sim.xs || []).forEach((x) => {
-          ctx.fillStyle = T.c5;
+          ctx.fillStyle = T.ctrl;
           ctx.beginPath();
           ctx.arc(m.mapX(clamp(x, -2.9, 2.9)), m.y1 - 7, 4, 0, TWO);
           ctx.fill();
         });
         const barH = clamp((S.metrics.H近似 + 2.2) / 3.2, 0.05, 1) * (S.H - 80);
-        ctx.fillStyle = T.c6;
+        ctx.fillStyle = T.energy;
         ctx.fillRect(S.W - 28, S.H - 30 - barH, 14, barH);
         const ner = /ner|negative_entropy|entropy_regularized|joint_ner/i.test(S.opId || "");
-        label(ctx, ner ? "NER：把 +H 翻成 −H，分布被逼尖（右柱=熵示意）" : "尖峰熵低；摊平熵高（均匀最大）", 28, 22, T);
+        label(ctx, ner ? "NER：x=σ z₀ 重参数，−H 把分布逼尖（绿柱=熵）" : "x=σ z₀ 重参数不闪烁；尖峰熵低，摊平熵高", 28, 22, T);
       },
     });
 
     add(["transport"], {
       init(S) {
-        S.sim.p = Array.from({ length: 40 }, () => ({ x: randn() * 0.8, y: randn() * 0.6 }));
+        S.sim.p0 = Array.from({ length: 36 }, () => ({ x: randn() * 0.85, y: randn() * 0.65 }));
+        S.sim.p = S.sim.p0.map((p) => ({ x: p.x, y: p.y }));
+        S.sim.grid = [];
+        for (let i = -4; i <= 4; i++) for (let j = -3; j <= 3; j++) S.sim.grid.push({ x: i * 0.38, y: j * 0.38 });
       },
-      tick(S, dt) {
+      tick(S) {
         const eps = S.sliders.eps != null ? S.sliders.eps : 0.2;
-        S.sim.p.forEach((p) => {
-          const phi = -p.x; /* contract */
-          p.x += eps * phi * dt * 3;
-          p.y += eps * (-0.3 * p.y) * dt * 3;
-        });
-        if (S.frame % 90 === 0) S.sim.p.forEach((p) => { p.x = randn() * 0.8; p.y = randn() * 0.6; });
+        const phiX = (x) => -Math.tanh(x);
+        const phiY = (y) => -0.28 * Math.tanh(y);
+        S.sim.p = S.sim.p0.map((p) => ({ x: p.x + eps * phiX(p.x), y: p.y + eps * phiY(p.y) }));
+        /* T'(x)=1+ε φ'(x)=1−ε sech²(x) */
+        const sech2 = (u) => { const c = 1 / Math.cosh(u); return c * c; };
+        S.sim.invJac = (x, y) => 1 / Math.max(0.12, Math.abs((1 - eps * sech2(x)) * (1 - 0.28 * eps * sech2(y))));
+        S.metrics["ε"] = eps;
+        S.metrics["中心 1/|det∇T|"] = S.sim.invJac(0, 0);
       },
       draw(ctx, S, T) {
-        const cx = S.W / 2, cy = S.H / 2, sc = 90;
-        S.sim.p.forEach((p) => {
-          ctx.fillStyle = T.c3;
-          ctx.beginPath(); ctx.arc(cx + p.x * sc, cy + p.y * sc, 4, 0, TWO); ctx.fill();
-          arrow(ctx, cx + p.x * sc, cy + p.y * sc, -p.x * 18, -0.3 * p.y * 18, T.c5);
+        const cx = S.W / 2, cy = S.H / 2 + 6, sc = 92;
+        const eps = S.sliders.eps != null ? S.sliders.eps : 0.2;
+        const Tm = (p) => ({ x: p.x + eps * (-Math.tanh(p.x)), y: p.y + eps * (-0.28 * Math.tanh(p.y)) });
+        const cell = 0.38;
+        for (let i = -4; i < 4; i++) for (let j = -3; j < 3; j++) {
+          const c0 = { x: (i + 0.5) * cell, y: (j + 0.5) * cell };
+          const q = Tm(c0);
+          const inv = S.sim.invJac ? S.sim.invJac(c0.x, c0.y) : 1;
+          const a = clamp((inv - 0.7) / 2.2, 0.06, 0.85);
+          ctx.fillStyle = `rgba(91,140,255,${a})`;
+          ctx.fillRect(cx + (q.x - cell * 0.45) * sc, cy + (q.y - cell * 0.45) * sc, cell * 0.9 * sc, cell * 0.9 * sc);
+        }
+        ctx.strokeStyle = "rgba(91,140,255,.35)";
+        ctx.lineWidth = 1;
+        for (let i = -4; i <= 4; i++) {
+          ctx.beginPath();
+          for (let j = -3; j <= 3; j++) {
+            const q = Tm({ x: i * cell, y: j * cell });
+            const px = cx + q.x * sc, py = cy + q.y * sc;
+            if (j === -3) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        S.sim.p.forEach((p, k) => {
+          const p0 = S.sim.p0[k];
+          ctx.fillStyle = T.state;
+          ctx.beginPath(); ctx.arc(cx + p.x * sc, cy + p.y * sc, 3.4, 0, TWO); ctx.fill();
+          arrow(ctx, cx + p.x * sc, cy + p.y * sc, -Math.tanh(p0.x) * 16, -0.28 * Math.tanh(p0.y) * 16, T.ctrl);
         });
-        label(ctx, "T(z)=z+εφ(z)  体积变 → 密度变", 36, 22, T);
+        label(ctx, "体积被压 → 1/|det ∇T| 升高（格子加深）", 28, 22, T);
       },
     });
 
     add(["continuity"], {
       init(S) {
-        S.sim.grid = Array.from({ length: 24 }, (_, i) => Array.from({ length: 14 }, (_, j) => Math.exp(-((i - 8) ** 2 + (j - 7) ** 2) / 18)));
+        const nx = 24, ny = 14;
+        S.sim.nx = nx; S.sim.ny = ny;
+        S.sim.grid = Array.from({ length: nx }, (_, i) => Array.from({ length: ny }, (_, j) => Math.exp(-((i - 8) ** 2 + (j - 7) ** 2) / 18)));
+        let m0 = 0;
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) m0 += S.sim.grid[i][j];
+        S.sim.mass0 = m0;
       },
       tick(S, dt) {
-        const g = S.sim.grid;
-        const nxt = g.map((row) => row.slice());
+        const nx = S.sim.nx, ny = S.sim.ny, g = S.sim.grid;
         const vx = S.sliders.vx != null ? S.sliders.vx : 0.6;
-        for (let i = 1; i < 23; i++) for (let j = 1; j < 13; j++) {
-          nxt[i][j] = g[i][j] - dt * 8 * (g[i][j] * vx - g[i - 1][j] * vx);
+        const dtA = Math.min(dt * 6, 0.35);
+        const nxt = g.map((row) => row.slice());
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+          const im = (i - 1 + nx) % nx, ip = (i + 1) % nx;
+          const jm = (j - 1 + ny) % ny, jp = (j + 1) % ny;
+          const phi = vx * (0.55 + 0.22 * Math.sin(TWO * i / nx));
+          const fxL = phi >= 0 ? phi * g[im][j] : phi * g[i][j];
+          const fxR = phi >= 0 ? phi * g[i][j] : phi * g[ip][j];
+          const fyB = 0.08 * vx * g[i][jm];
+          const fyT = 0.08 * vx * g[i][j];
+          nxt[i][j] = Math.max(0, g[i][j] - dtA * ((fxR - fxL) + (fyT - fyB)));
         }
         S.sim.grid = nxt;
-        if (S.frame > 0 && S.frame % 200 === 0) {
-          S.sim.grid = Array.from({ length: 24 }, (_, i) => Array.from({ length: 14 }, (_, j) => Math.exp(-((i - 8) ** 2 + (j - 7) ** 2) / 18)));
-        }
+        let mass = 0;
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) mass += nxt[i][j];
+        S.metrics["∑Q"] = mass;
+        S.metrics["∑Q₀"] = S.sim.mass0;
+        S.metrics["相对漂移"] = (mass - S.sim.mass0) / (S.sim.mass0 || 1);
       },
       draw(ctx, S, T) {
-        const cw = (S.W - 40) / 24, ch = (S.H - 50) / 14;
-        for (let i = 0; i < 24; i++) for (let j = 0; j < 14; j++) {
+        const nx = S.sim.nx, ny = S.sim.ny;
+        const cw = (S.W - 40) / nx, ch = (S.H - 56) / ny;
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
           const v = clamp(S.sim.grid[i][j], 0, 1);
           ctx.fillStyle = `rgba(91,140,255,${0.08 + 0.85 * v})`;
           ctx.fillRect(20 + i * cw, 36 + j * ch, cw - 1, ch - 1);
         }
-        for (let j = 2; j < 12; j += 2) arrow(ctx, 30, 40 + j * ch, 26, 0, T.c5);
-        label(ctx, "∂τ Q = −∇·(Q φ)  质量随流走、总量守恒", 24, 22, T);
+        for (let j = 2; j < ny - 1; j += 2) arrow(ctx, 30, 40 + j * ch, 26, 0, T.ctrl);
+        const ok = Math.abs(S.metrics["相对漂移"] || 0) < 0.08;
+        label(ctx, "周期边界 + 守恒通量   ∑Q=" + (S.metrics["∑Q"] || 0).toFixed(3) + (ok ? " 守恒" : ""), 24, 22, T);
       },
     });
 
@@ -789,10 +926,35 @@
       init(S) {
         S.sim.paths = Array.from({ length: 5 }, (_, k) => [{ x: 40, y: 80 + k * 40 }]);
         S.sim.u = 0.4;
+        S.sim.y = [0.9, -0.2, 0.65, 0.1];
       },
       tick(S, dt) {
         const uamp = S.sliders.uamp != null ? S.sliders.uamp : 0.4;
         S.sim.u = uamp;
+        if (S.demo === "lookahead") {
+          const y = S.sim.y;
+          const n = 48;
+          const a = 0.45;
+          const gZ = [0], lZ = [0];
+          let zg = 0, zl = 0;
+          for (let i = 0; i < n; i++) {
+            const t = i / (n - 1);
+            const yi = y[Math.min(3, Math.floor(t * 4))];
+            const ug = uamp * (yi - zg) * 1.6 + uamp * 0.25 * Math.sin(t * Math.PI * 2);
+            zg = zg + ( -a * zg + ug ) * 0.12;
+            gZ.push(zg);
+            const seg = Math.floor(t * 4);
+            const ynow = y[Math.min(3, seg)];
+            const ul = uamp * (ynow - zl) * 2.1;
+            zl = zl + ( -a * zl + ul ) * 0.12;
+            lZ.push(zl);
+          }
+          S.sim.gZ = gZ; S.sim.lZ = lZ;
+          S.metrics.u = uamp;
+          S.metrics.全局终端 = gZ[gZ.length - 1];
+          S.metrics.局部终端 = lZ[lZ.length - 1];
+          return;
+        }
         S.sim.paths.forEach((path, k) => {
           const last = path[path.length - 1];
           if (last.x > S.W - 30) {
@@ -807,25 +969,53 @@
         });
       },
       draw(ctx, S, T) {
+        if (S.demo === "lookahead") {
+          const gZ = S.sim.gZ || [], lZ = S.sim.lZ || [];
+          const x0 = 36, x1 = S.W - 24, y0 = 48, y1 = S.H - 36;
+          const X = (i, n) => x0 + (x1 - x0) * i / (n - 1);
+          const Y = (z) => (y0 + y1) / 2 - z * 70;
+          ctx.setLineDash([7, 4]);
+          ctx.strokeStyle = T.base;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          gZ.forEach((z, i) => { const p = i ? ctx.lineTo : ctx.moveTo; p.call(ctx, X(i, gZ.length), Y(z)); });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.strokeStyle = T.ctrl;
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          const cuts = [0, 12, 24, 36, lZ.length - 1];
+          for (let s = 0; s < 4; s++) {
+            ctx.beginPath();
+            for (let i = cuts[s]; i <= cuts[s + 1] && i < lZ.length; i++) {
+              if (i === cuts[s]) ctx.moveTo(X(i, lZ.length), Y(lZ[i]));
+              else ctx.lineTo(X(i, lZ.length), Y(lZ[i]));
+            }
+            ctx.stroke();
+            const mid = cuts[s];
+            ctx.fillStyle = T.ctrl;
+            ctx.beginPath(); ctx.arc(X(mid, lZ.length), Y(lZ[mid] || 0), 4, 0, TWO); ctx.fill();
+          }
+          S.sim.y.forEach((yy, k) => {
+            const x = x0 + (x1 - x0) * (k + 0.5) / 4;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = T.state;
+            ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = T.state;
+            ctx.beginPath(); ctx.arc(x, Y(yy * 0.55), 4, 0, TWO); ctx.fill();
+          });
+          label(ctx, "虚线=全局最优（偷看未来 y）  实线=局部重规划", 28, 22, T);
+          S.metrics.u = S.sim.u;
+          return;
+        }
         S.sim.paths.forEach((path, k) => {
           ctx.strokeStyle = [T.c2, T.c3, T.c4, T.c5, T.c7][k];
           ctx.lineWidth = 1.6; ctx.beginPath();
           path.forEach((p, i) => { if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
           ctx.stroke();
         });
-        if (S.demo === "lookahead") {
-          const t0 = 70, tw = (S.W - 100) / 4;
-          for (let d = 0; d < 4; d++) {
-            const x = 40 + d * tw;
-            ctx.strokeStyle = d === (S.phase % 4) ? T.c5 : T.line;
-            ctx.strokeRect(x, 18, tw - 16, 28);
-            ctx.fillStyle = T.mu; ctx.font = "11px sans-serif";
-            ctx.fillText("t=" + (d + 1) + " 只看 y_t", x + 8, 36);
-          }
-          label(ctx, "单步前瞻：每时段局部最小，不偷看未来 y", 36, 22, T);
-        } else {
-          label(ctx, "ż = f(z,t)+u(z)   控制拧弯轨迹", 36, 22, T);
-        }
+        label(ctx, "ż = f(z,t)+u(z)   控制拧弯轨迹", 36, 22, T);
         S.metrics.u = S.sim.u;
       },
     });
@@ -896,7 +1086,37 @@
           ctx.fill();
         }
         const inf = /infinite_horizon/.test(S.opId || "");
-        label(ctx, inf ? "无穷时域：λ(∞)→0，终端 KL 摊进整条路径" : "蓝 z 正向 · 粉 λ 反向 · 右上 H(u) 驻点", 24, 22, T);
+        if (S.sim.z.length) {
+          const zT = S.sim.z[S.sim.z.length - 1];
+          const lT = S.sim.lam[S.sim.lam.length - 1];
+          if (!inf) {
+            ctx.strokeStyle = T.adj;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(zT.x, 28);
+            ctx.lineTo(zT.x, S.H - 28);
+            ctx.stroke();
+            ctx.fillStyle = T.adj;
+            ctx.font = "12px " + FONT_STACK;
+            ctx.fillText("λ(T)=∇ψ", zT.x - 64, 40);
+            ctx.beginPath(); ctx.arc(lT.x, lT.y, 5, 0, TWO); ctx.fill();
+          } else {
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = T.base;
+            ctx.beginPath();
+            for (let i = 0; i < S.sim.lam.length; i++) {
+              const t = i / (S.sim.lam.length - 1);
+              const env = S.H * 0.28 + 36 * Math.exp(-2.4 * t);
+              if (i) ctx.lineTo(S.sim.lam[i].x, env); else ctx.moveTo(S.sim.lam[i].x, env);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = T.adj;
+            ctx.font = "12px " + FONT_STACK;
+            ctx.fillText("渐近包络 λ(∞)→0", S.W - 168, 40);
+          }
+        }
+        label(ctx, inf ? "无穷时域：协态沿包络衰减，终端横截变成 λ(∞)=0" : "蓝 z · 紫 λ(T)=∇ψ 终端横截 · 橙 u", 24, 22, T);
       },
     });
 

@@ -668,15 +668,22 @@
    * 5. 熵泛函  H[Q]=−∫Q log Q
    * =================================================================== */
   reg("entropy_functional", {
-    init(S) { S.sim.xs = new Array(48).fill(0); },
+    init(S) {
+      const rng = mulberry(41);
+      S.sim.z0 = Array.from({ length: 48 }, () => {
+        const u = rng() || 1e-9, v = rng() || 1e-9;
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(TWO * v);
+      });
+      S.sim.u0 = Array.from({ length: 48 }, (_, i) => (i + 0.5) / 48);
+      S.sim.xs = S.sim.z0.slice();
+    },
     tick(S) {
       const spread = S.sliders.spread != null ? S.sliders.spread : 0.7;
       const ph = S.phase;
       const sig = ph === 0 ? 0.18 * (0.6 + 0.4 * spread) : ph === 1 ? 0.45 * spread + 0.12 : ph === 2 ? 1.35 * spread + 0.35 : 1.6 * spread;
       S.sim.sig = Math.max(0.08, sig);
       for (let i = 0; i < 48; i++) {
-        const u = Math.random() || 1e-9;
-        S.sim.xs[i] = (ph === 2 ? (-2.4 + 4.8 * Math.random()) : (S.sim.sig * Math.sqrt(-2 * Math.log(u)) * Math.cos(TWO * Math.random())));
+        S.sim.xs[i] = ph === 2 ? (-2.4 + 4.8 * S.sim.u0[i]) : (S.sim.sig * S.sim.z0[i]);
       }
       const Hg = hG(S.sim.sig);
       const Hh = entHist(hist(S.sim.xs, -3, 3, 24));
@@ -738,7 +745,14 @@
    * 6. 条件补全似然  L_imp = E_Q[log p(xmiss|xobs)]
    * =================================================================== */
   reg("imputation_likelihood", {
-    init(S) { S.sim.xs = new Array(30).fill(0); },
+    init(S) {
+      const rng = mulberry(77);
+      S.sim.z0 = Array.from({ length: 30 }, () => {
+        const u = rng() || 1e-9, v = rng() || 1e-9;
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(TWO * v);
+      });
+      S.sim.xs = S.sim.z0.slice();
+    },
     tick(S) {
       const sig = Math.max(0.06, S.sliders.sig != null ? S.sliders.sig : 0.35);
       const ph = S.phase;
@@ -746,10 +760,7 @@
       const mq = mp + (ph === 2 ? 0.15 : 0);
       const sq = ph === 0 ? 0.55 : ph === 1 ? 0.16 : ph === 2 ? 1.05 : 0.18;
       S.sim.mp = mp; S.sim.sp = sp; S.sim.mq = mq; S.sim.sq = sq;
-      for (let i = 0; i < 30; i++) {
-        const u = Math.random() || 1e-9;
-        S.sim.xs[i] = mq + sq * Math.sqrt(-2 * Math.log(u)) * Math.cos(TWO * Math.random());
-      }
+      for (let i = 0; i < 30; i++) S.sim.xs[i] = mq + sq * S.sim.z0[i];
       S.metrics.L_imp = limpG(mq, sq, mp, sp);
       S.metrics.峰logp = logN(mp, mp, sp);
       S.metrics.σ_Q = sq;

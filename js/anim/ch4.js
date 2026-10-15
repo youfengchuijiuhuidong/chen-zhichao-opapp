@@ -182,19 +182,20 @@
     }
     return { m, s2, s: Math.sqrt(Math.max(s2, 1e-4)), energy, kl: gaussKL(m, s2, mP, sP2), mP, sP2 };
   }
-  function infoSnaps(v, seed, nPart, nInner) {
+  function infoSnaps(v, seed, nPart, nInner, start) {
     const rng = rngFn(seed);
-    let pts = makeCloud(rng, nPart || 28, 0.05, 0, 0.92, 0.62);
+    const st = start || { mx: -0.08, my: 0, sx: 0.48, sy: 0.40 };
+    let pts = makeCloud(rng, nPart || 24, st.mx, st.my, st.sx, st.sy);
     const snaps = [clonePts(pts)];
     const hist = [];
-    const inner = nInner || 16;
+    const inner = nInner || 12;
     for (let k = 0; k < 3; k++) {
       for (let s = 0; s < inner; s++) {
         const acc = rkhs(pts, v);
         let nrm = 0;
         for (let i = 0; i < pts.length; i++) {
-          pts[i].x = Math.max(-2.45, Math.min(2.45, pts[i].x + acc[i].x * 0.1));
-          pts[i].y = Math.max(-1.55, Math.min(1.55, pts[i].y + acc[i].y * 0.1));
+          pts[i].x = Math.max(-2.45, Math.min(2.45, pts[i].x + acc[i].x * 0.11));
+          pts[i].y = Math.max(-1.55, Math.min(1.55, pts[i].y + acc[i].y * 0.11));
           nrm += Math.hypot(acc[i].x, acc[i].y);
         }
         hist.push(nrm / pts.length);
@@ -203,6 +204,65 @@
     }
     return { snaps, hist };
   }
+  function cachedSnaps(S, slot, v, seed, nPart, nInner, start) {
+    const key = slot + ":" + Number(v).toFixed(2) + ":" + (nPart || 24);
+    if (S.sim[slot + "K"] === key) return S.sim[slot];
+    S.sim[slot + "K"] = key;
+    S.sim[slot] = infoSnaps(v, seed, nPart, nInner, start);
+    return S.sim[slot];
+  }
+  function evolveCloud(pts0, steps, dt, fn) {
+    const pts = clonePts(pts0);
+    for (let s = 0; s < steps; s++) {
+      for (let i = 0; i < pts.length; i++) {
+        const f = fn(pts[i]);
+        pts[i].x = clamp(pts[i].x + dt * f.x, -2.4, 2.4);
+        pts[i].y = clamp(pts[i].y + dt * f.y, -1.6, 1.6);
+      }
+    }
+    return pts;
+  }
+  function plotCurves(ctx, B, T, xmin, xmax, specs, xlab) {
+    const sampled = specs.map((sp) => sample1d(120, xmin, xmax, sp.fn));
+    let ymax = 0.02;
+    for (let k = 0; k < sampled.length; k++) {
+      for (let i = 0; i < sampled[k].ys.length; i++) {
+        if (sampled[k].ys[i] > ymax) ymax = sampled[k].ys[i];
+      }
+    }
+    ymax *= 1.18;
+    const X = (x) => B.x0 + (x - xmin) / (xmax - xmin) * (B.x1 - B.x0);
+    const Y = (y) => B.y1 - (y / ymax) * (B.y1 - B.y0);
+    axes(ctx, B, T, xlab || "z", "");
+    for (let k = 0; k < specs.length; k++) {
+      const sp = specs[k];
+      if (sp.fillA) area(ctx, sampled[k].xs, sampled[k].ys, X, Y, B.y1, rgba(sp.col, sp.fillA));
+      if (sp.dash) ctx.setLineDash(sp.dash);
+      curve(ctx, sampled[k].xs, sampled[k].ys, X, Y, sp.col, sp.lw || 2);
+      ctx.setLineDash([]);
+    }
+    return { X, Y, ymax };
+  }
+  function vbar(ctx, x, y, w, h, v, vmax, col, lab, T) {
+    const hh = clamp(v / (vmax || 1), 0, 1) * h;
+    ctx.fillStyle = rgba(col, T.dark ? 0.16 : 0.22);
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y + h - hh, w, hh);
+    ctx.fillStyle = T.mu;
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(lab, x + w / 2, y + h + 12);
+    ctx.fillStyle = T.tx;
+    ctx.fillText(typeof v === "number" ? v.toFixed(2) : String(v), x + w / 2, y + h - hh - 4);
+    ctx.textAlign = "left";
+  }
+  function modeLabels(ctx, V, T) {
+    ctx.font = "11px sans-serif";
+    ctx.fillStyle = T.c6;
+    ctx.fillText("峰 A", V.X(-1.12) - 12, V.Y(0.85));
+    ctx.fillText("峰 B", V.X(1.16) - 12, V.Y(0.85));
+  }
   function bind(S, id) {
     S.sim.tag = id;
     S.sim.ch4 = 1;
@@ -210,7 +270,7 @@
     global.__CH4_ID = id;
   }
   function padBox(S, extra) {
-    const t = 28, b = 32, l = 18, r = 16;
+    const t = 34, b = 44, l = 24, r = 16;
     const e = extra || {};
     return {
       x0: l + (e.l || 0),
@@ -270,10 +330,13 @@
     ctx.fill();
   }
   function caption(ctx, S, T, text, on) {
-    ctx.font = on ? "bold 13px sans-serif" : "12px sans-serif";
-    ctx.fillStyle = on ? T.c5 : T.tx;
+    ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(text, 18, 20);
+    const w = Math.min(S.W - 24, ctx.measureText(text).width + 18);
+    ctx.fillStyle = rgba(T.c5, on ? (T.dark ? 0.18 : 0.28) : 0.08);
+    ctx.fillRect(12, 8, w, 20);
+    ctx.fillStyle = on ? T.c5 : T.tx;
+    ctx.fillText(text, 20, 22);
   }
   function chip(ctx, text, x, y, T, on) {
     ctx.font = "11px sans-serif";
@@ -448,376 +511,349 @@
   }
 
   /* ============================================================
-   * 1. 粒子量子化
+   * 1. 粒子量子化  Q=(1/M)Σ δ(z−z_i)
    * ============================================================ */
   OP.particle_quantization = {
     init(S) {
       const rng = rngFn(11);
       const xs = [];
-      for (let i = 0; i < 80; i++) {
+      for (let i = 0; i < 96; i++) {
         xs.push(rng() < MIX.w ? MIX.m1 + MIX.s1 * randn(rng) : MIX.m2 + MIX.s2 * randn(rng));
       }
-      S.sim = { rng, xs, kde: [], l2: 0, Mshow: 8 };
+      S.sim = { rng, xs };
       bind(S, "particle_quantization");
     },
     tick(S) {
-      const { ph, e } = phof(S);
+      const { ph } = phof(S);
       const h = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const M = ph === 0 ? 0 : ph === 1 ? 10 : 52;
-      S.sim.Mshow = M;
+      const M = [0, 10, 36, 80][ph];
       const xs = S.sim.xs.slice(0, M);
-      // L2(KDE, 真密度)
       let l2 = 0;
       const N = 64;
       for (let i = 0; i <= N; i++) {
         const x = -3 + 6 * i / N;
-        const { q } = kde1d(xs, x, h);
+        const q = M ? kde1d(xs, x, h).q : 0;
         const d = q - mixDens(x);
         l2 += d * d;
       }
       S.sim.l2 = l2 / (N + 1);
-      S.sim.h = h;
-      S.metrics.M = M;
+      S.metrics.M = String(M);
       S.metrics.核宽 = h;
       S.metrics.L2误差 = S.sim.l2;
-      S.metrics.弱收敛 = ph >= 2 ? "更贴真密度" : "欠采样";
+      S.metrics.弱收敛 = ph >= 2 ? "贴真密度" : "欠采样";
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const B = padBox(S, { r: 118, b: 8 });
-      const xmin = -3, xmax = 3;
-      const X = (x) => B.x0 + (x - xmin) / (xmax - xmin) * (B.x1 - B.x0);
-      const trueY = sample1d(120, xmin, xmax, mixDens);
-      let ymax = 0.02;
-      for (let i = 0; i < trueY.ys.length; i++) if (trueY.ys[i] > ymax) ymax = trueY.ys[i];
       const h = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const M = ph === 0 ? 0 : ph === 1 ? 10 : 52;
-      const xs = S.sim.xs.slice(0, Math.max(1, M));
-      const kde = sample1d(120, xmin, xmax, (x) => kde1d(xs, x, h).q);
-      for (let i = 0; i < kde.ys.length; i++) if (kde.ys[i] > ymax) ymax = kde.ys[i];
-      ymax *= 1.18;
-      const Y = (y) => B.y1 - 28 - y / ymax * (B.y1 - B.y0 - 36);
-      axes(ctx, B, T, "z", "密度");
-      // 真密度
-      const showTrue = ph === 0 || ph >= 2;
-      if (showTrue) {
-        area(ctx, trueY.xs, trueY.ys, X, Y, B.y1 - 28, rgba(T.c2, ph === 0 ? 0.28 : 0.12));
-        curve(ctx, trueY.xs, trueY.ys, X, Y, T.c2, ph === 0 ? 2.6 : 1.4);
-      }
+      const M = [0, 10, 36, 80][ph];
+      const xs = S.sim.xs.slice(0, M);
+      const B = padBox(S, { r: 124 });
+      const specs = [{ fn: mixDens, col: T.c2, fillA: ph === 0 ? 0.32 : 0.10, lw: ph === 0 ? 2.8 : 1.4 }];
+      if (ph >= 1 && M) specs.push({ fn: (x) => kde1d(xs, x, h).q, col: T.c5, fillA: 0.18, lw: 2.2 });
+      const { X, Y, ymax } = plotCurves(ctx, B, T, -3, 3, specs, "z");
+      ctx.fillStyle = T.mu;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("密度", B.x0 + 6, B.y0 + 12);
       if (ph >= 1) {
-        area(ctx, kde.xs, kde.ys, X, Y, B.y1 - 28, rgba(T.c5, 0.16));
-        curve(ctx, kde.xs, kde.ys, X, Y, T.c5, 2);
         xs.forEach((z) => {
           const px = X(z);
           ctx.strokeStyle = z < 0 ? T.c3 : T.c6;
-          ctx.lineWidth = ph === 1 ? 2.2 : 1.4;
+          ctx.lineWidth = ph === 1 ? 2.4 : 1.3;
           ctx.beginPath();
-          ctx.moveTo(px, B.y1 - 28);
-          ctx.lineTo(px, Y(kde1d([z], z, Math.max(0.06, h * 0.25)).q * xs.length * 0.12 + 0.15));
+          ctx.moveTo(px, B.y1);
+          ctx.lineTo(px, Y(ymax * (ph === 1 ? 0.55 : 0.22)));
           ctx.stroke();
           ctx.fillStyle = z < 0 ? T.c3 : T.c6;
           ctx.beginPath();
-          ctx.arc(px, B.y1 - 28, ph === 3 ? 4.2 : 3.2, 0, TWO);
+          ctx.arc(px, B.y1, ph === 3 ? 4.4 : 3.2, 0, TWO);
           ctx.fill();
         });
       }
-      // 右侧说明
-      const rx = B.x1 + 10;
-      panel(ctx, rx, 30, 108, S.H - 64, T, true);
-      legend(ctx, [
-        { c: T.c2, lab: "真 Q 连续" },
-        { c: T.c5, lab: "经验 KDE" },
-        { c: T.c3, lab: "左峰粒子" },
-        { c: T.c6, lab: "右峰粒子" },
-      ], rx + 8, 50, T);
-      ctx.fillStyle = T.mu;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("Q=Σ δ/M", rx + 8, 122);
-      const msgs = [
-        "连续密度：参数族",
-        "量子化成 M 个尖峰",
-        "M↑ 弱收敛到原分布",
-        "多峰：每峰一簇粒子",
-      ];
-      caption(ctx, S, T, msgs[ph], true);
       if (ph === 3) {
         ctx.strokeStyle = T.c3;
-        ctx.strokeRect(X(-2.1), Y(ymax * 0.95), X(-0.2) - X(-2.1), 70);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(X(-2.15), Y(ymax * 0.98), X(-0.15) - X(-2.15), Y(0) - Y(ymax * 0.98));
         ctx.strokeStyle = T.c6;
-        ctx.strokeRect(X(0.2), Y(ymax * 0.95), X(2.2) - X(0.2), 70);
+        ctx.strokeRect(X(0.15), Y(ymax * 0.98), X(2.25) - X(0.15), Y(0) - Y(ymax * 0.98));
         ctx.fillStyle = T.c3;
-        ctx.font = "11px sans-serif";
-        ctx.fillText("峰 1", X(-2.0), Y(ymax * 0.95) - 4);
+        ctx.font = "12px sans-serif";
+        ctx.fillText("峰 1 粒子簇", X(-2.05), Y(ymax * 0.98) - 6);
         ctx.fillStyle = T.c6;
-        ctx.fillText("峰 2", X(0.35), Y(ymax * 0.95) - 4);
+        ctx.fillText("峰 2 粒子簇", X(0.25), Y(ymax * 0.98) - 6);
       }
+      const rx = B.x1 + 10;
+      panel(ctx, rx, 34, 112, S.H - 82, T, true);
+      legend(ctx, [
+        { c: T.c2, lab: "真连续 Q" },
+        { c: T.c5, lab: "经验 KDE" },
+        { c: T.c3, lab: "左峰 δ" },
+        { c: T.c6, lab: "右峰 δ" },
+      ], rx + 8, 54, T);
+      ctx.fillStyle = T.tx;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("Q = Σᵢ δᵢ / M", rx + 8, 128);
+      ctx.fillStyle = T.mu;
+      ctx.fillText("M = " + M, rx + 8, 148);
+      ctx.fillText("h = " + h.toFixed(2), rx + 8, 166);
+      ctx.fillText("L² = " + (S.sim.l2 || 0).toFixed(3), rx + 8, 184);
+      caption(ctx, S, T, ["连续密度：参数族", "量子化成 M 个尖峰", "M↑ 弱收敛到原分布", "多峰：每峰一簇粒子"][ph], true);
     },
   };
 
   /* ============================================================
-   * 2. 狄拉克德尔塔
+   * 2. 狄拉克德尔塔  ⟨δ_{z_i}, f⟩ = f(z_i)
    * ============================================================ */
   OP.dirac_delta = {
     init(S) {
-      S.sim = { z0: 0.35, integ: 1, inner: 0, f0: 0 };
+      S.sim = { z0: 0.42 };
       bind(S, "dirac_delta");
     },
     tick(S) {
-      const { ph, e } = phof(S);
+      const { ph } = phof(S);
       const sp = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const hGoal = ph === 0 ? sp * 0.95 + 0.12 : ph === 1 ? 0.055 + 0.04 * sp : 0.08 + 0.05 * sp;
-      S.sim.h = hGoal;
+      const h = [sp * 0.95 + 0.18, 0.048 + 0.03 * sp, 0.10 + 0.06 * sp, 0.14 + 0.08 * sp][ph];
       const z0 = S.sim.z0;
       const f = (x) => Math.cos(1.2 * x) + 1.15;
-      S.sim.f0 = f(z0);
-      // 数值积分 ∫ k_h 与 ⟨k_h, f⟩
       let integ = 0, inner = 0;
-      const N = 160, xmin = -3, xmax = 3, dx = (xmax - xmin) / N;
+      const N = 180, xmin = -3, xmax = 3, dx = (xmax - xmin) / N;
       for (let i = 0; i <= N; i++) {
         const x = xmin + i * dx;
-        const k = gauss(x, z0, S.sim.h);
+        const k = gauss(x, z0, h);
         integ += k * dx;
         inner += k * f(x) * dx;
       }
+      S.sim.h = h;
       S.sim.integ = integ;
       S.sim.inner = inner;
-      S.metrics.核宽 = S.sim.h;
+      S.sim.f0 = f(z0);
+      S.metrics.核宽 = h;
       S.metrics.积分 = integ;
       S.metrics.内积 = inner;
       S.metrics.f_zi = S.sim.f0;
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const B = padBox(S, { r: 130 });
-      const xmin = -3, xmax = 3;
       const sp = clamp(sl(S, "spread", 0.5), 0.1, 1.4);
-      const h = ph === 0 ? sp * 0.95 + 0.12 : ph === 1 ? 0.055 + 0.04 * sp : 0.08 + 0.05 * sp;
+      const h = [sp * 0.95 + 0.18, 0.048 + 0.03 * sp, 0.10 + 0.06 * sp, 0.14 + 0.08 * sp][ph];
       const z0 = S.sim.z0;
+      const B = padBox(S, { r: 132 });
+      const xmin = -3, xmax = 3;
       const kfn = (x) => gauss(x, z0, h);
       const ffn = (x) => Math.cos(1.2 * x) + 1.15;
-      const Ks = sample1d(140, xmin, xmax, kfn);
-      const Fs = sample1d(140, xmin, xmax, ffn);
+      const Ks = sample1d(160, xmin, xmax, kfn);
+      const Fs = sample1d(160, xmin, xmax, ffn);
       let kmax = 0.01;
-      for (let i = 0; i < Ks.ys.length; i++) if (Ks.ys[i] > kmax) kmax = Ks.ys[i];
+      Ks.ys.forEach((v) => { if (v > kmax) kmax = v; });
       kmax *= 1.12;
-      const X = (x) => B.x0 + (x - xmin) / (xmax - xmin) * (B.x1 - B.x0);
-      const Yk = (y) => B.y1 - y / kmax * (B.y1 - B.y0 - 8);
-      const Yf = (y) => B.y1 - (y / 2.4) * (B.y1 - B.y0 - 8);
+      const X = (x) => B.x0 + (x - xmin) / 6 * (B.x1 - B.x0);
+      const Yk = (y) => B.y1 - y / kmax * (B.y1 - B.y0);
+      const Yf = (y) => B.y1 - (y / 2.5) * (B.y1 - B.y0);
       axes(ctx, B, T, "z", "");
       if (ph === 3) {
-        curve(ctx, Fs.xs, Fs.ys, X, Yf, T.c3, 2);
+        curve(ctx, Fs.xs, Fs.ys, X, Yf, T.c3, 2.2);
         ctx.fillStyle = T.c3;
         ctx.font = "11px sans-serif";
         ctx.fillText("测试函数 f(z)", B.x0 + 8, B.y0 + 14);
       }
-      area(ctx, Ks.xs, Ks.ys, X, Yk, B.y1, rgba(T.c5, ph === 2 ? 0.38 : 0.18));
-      curve(ctx, Ks.xs, Ks.ys, X, Yk, T.c5, 2.2);
-      // 针
+      area(ctx, Ks.xs, Ks.ys, X, Yk, B.y1, rgba(T.c5, ph === 2 ? 0.42 : 0.18));
+      curve(ctx, Ks.xs, Ks.ys, X, Yk, T.c5, ph === 1 ? 2.8 : 2);
       ctx.strokeStyle = T.c6;
-      ctx.lineWidth = ph >= 1 ? 2.4 : 1.2;
+      ctx.lineWidth = ph >= 1 ? 3 : 1.2;
       ctx.beginPath();
       ctx.moveTo(X(z0), B.y1);
-      ctx.lineTo(X(z0), B.y0 + 6);
+      ctx.lineTo(X(z0), B.y0 + 4);
       ctx.stroke();
       ctx.fillStyle = T.c6;
       ctx.beginPath();
-      ctx.arc(X(z0), B.y1, 5, 0, TWO);
+      ctx.arc(X(z0), B.y1, 5.5, 0, TWO);
       ctx.fill();
       ctx.fillStyle = T.tx;
-      ctx.font = "11px sans-serif";
-      ctx.fillText("zᵢ", X(z0) + 6, B.y1 - 8);
+      ctx.font = "12px sans-serif";
+      ctx.fillText("zᵢ", X(z0) + 8, B.y1 - 10);
+      if (ph === 0) {
+        ctx.fillStyle = T.c5;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("平滑核 kₕ  带宽 h=" + h.toFixed(2), B.x0 + 8, B.y0 + 16);
+      }
+      if (ph === 1) {
+        ctx.fillStyle = T.c6;
+        ctx.font = "bold 13px sans-serif";
+        ctx.fillText("h→0 ：核收成一根针", B.x0 + 8, B.y0 + 16);
+      }
       if (ph === 2) {
         ctx.fillStyle = T.c5;
         ctx.font = "bold 13px sans-serif";
-        ctx.fillText("∫ kₕ = " + S.sim.integ.toFixed(3) + "  （保持 1）", B.x0 + 8, B.y0 + 16);
+        ctx.fillText("∫ kₕ dz = " + (S.sim.integ || 0).toFixed(3) + "  （质量守恒 = 1）", B.x0 + 8, B.y0 + 16);
       }
       if (ph === 3) {
         ctx.fillStyle = T.c6;
         ctx.beginPath();
-        ctx.arc(X(z0), Yf(S.sim.f0), 6, 0, TWO);
+        ctx.arc(X(z0), Yf(S.sim.f0), 7, 0, TWO);
         ctx.fill();
         ctx.fillStyle = T.tx;
         ctx.font = "12px sans-serif";
-        ctx.fillText("⟨δ,f⟩ = f(zᵢ) = " + S.sim.f0.toFixed(3), B.x0 + 8, B.y0 + 16);
+        ctx.fillText("⟨δ,f⟩ = f(zᵢ) = " + (S.sim.f0 || 0).toFixed(3), B.x0 + 8, B.y0 + 34);
         ctx.fillStyle = T.mu;
-        ctx.fillText("⟨kₕ,f⟩ = " + S.sim.inner.toFixed(3) + "  → 逼近点取值", B.x0 + 8, B.y0 + 34);
+        ctx.fillText("⟨kₕ,f⟩ = " + (S.sim.inner || 0).toFixed(3) + "  → 逼近点取值", B.x0 + 8, B.y0 + 52);
       }
-      const msgs = ["平滑核逐渐变窄", "极限变成一根针", "积分保持 1", "对测试函数只取点值"];
-      caption(ctx, S, T, msgs[ph], true);
+      caption(ctx, S, T, ["平滑核逐渐变窄", "极限变成一根针", "积分保持 1", "对测试函数只取点值"][ph], true);
       legend(ctx, [
         { c: T.c5, lab: "核 kₕ" },
         { c: T.c6, lab: "δ 支撑" },
         { c: T.c3, lab: "f(z)" },
-      ], S.W - 126, 48, T);
+      ], S.W - 126, 50, T);
     },
   };
 
   /* ============================================================
-   * 3. 粒子常微分方程
+   * 3. 粒子常微分方程  dz/dτ = φ(z)
+   * 每帧从初值重积分，phase 切换立刻换分镜
    * ============================================================ */
   OP.particle_ode = {
     init(S) {
-      const rng = rngFn(21);
-      const pts = [];
-      for (let i = 0; i < 7; i++) {
-        pts.push({
-          x: -2.1,
-          y: -1.1 + i * 0.36,
-          disc: [{ x: -2.1, y: -1.1 + i * 0.36 }],
-          cont: [{ x: -2.1, y: -1.1 + i * 0.36 }],
-        });
-      }
-      S.sim = { rng, pts, flip: 1, hops: 0 };
+      S.sim = {};
       bind(S, "particle_ode");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const uamp = clamp(sl(S, "uamp", 0.4), 0, 1.3);
-      S.sim.flip = ph === 3 ? -1 : 1;
-      const omega = (0.55 + 0.85 * uamp) * S.sim.flip;
-      const phi = (z) => ({
-        x: 0.55,
-        y: omega * Math.sin(1.1 * z.x) - 0.25 * z.y,
-      });
-      const epsDisc = 0.42;
-      S.sim._acc = (S.sim._acc || 0) + dt;
-      const hop = S.sim._acc > 0.28;
-      S.sim.pts.forEach((p) => {
-        const fc = phi(p.cont[p.cont.length - 1]);
-        const nc = {
-          x: p.cont[p.cont.length - 1].x + fc.x * dt * 1.15,
-          y: p.cont[p.cont.length - 1].y + fc.y * dt * 1.15,
-        };
-        if (nc.x > 2.4) {
-          p.cont = [{ x: -2.1, y: p.y }];
-          p.disc = [{ x: -2.1, y: p.y }];
-          p.x = -2.1;
-        } else {
-          p.cont.push(nc);
-          if (p.cont.length > 90) p.cont.shift();
-        }
-        if (hop) {
-          const last = p.disc[p.disc.length - 1];
-          const fd = phi(last);
-          p.disc.push({ x: last.x + epsDisc * fd.x, y: last.y + epsDisc * fd.y });
-          if (p.disc.length > 18) p.disc.shift();
-        }
-      });
-      if (hop) {
-        S.sim._acc = 0;
-        S.sim.hops++;
-      }
       S.metrics.控制强度 = uamp;
       S.metrics.ε离散 = 0.42;
-      S.metrics.转向 = S.sim.flip < 0 ? "反向" : "正向";
-      S.metrics.跳步 = S.sim.hops;
+      S.metrics.转向 = ph === 3 ? "反向" : "正向";
+      S.metrics.粒子数 = String([3, 4, 7, 7][ph]);
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const V = view2d(S, [-2.3, 2.5], [-1.7, 1.7], { r: 8 });
-      axes(ctx, V, T, "τ 沿水平", "z");
-      // φ 场
       const uamp = clamp(sl(S, "uamp", 0.4), 0, 1.3);
-      const omega = (0.55 + 0.85 * uamp) * (ph === 3 ? -1 : 1);
-      if (ph >= 1) {
-        fieldArrows(ctx, V, T, (x, y) => ({ x: 0.55, y: omega * Math.sin(1.1 * x) - 0.25 * y }), rgba(T.c7, 0.55), 7, 5, 16, ph === 3 ? 1 : 0.55);
+      const sign = ph === 3 ? -1 : 1;
+      const omega = (0.55 + 0.9 * uamp) * sign;
+      const phi = (z) => ({ x: 0.62, y: omega * Math.sin(1.15 * z.x) - 0.22 * z.y });
+      const V = view2d(S, [-2.4, 2.6], [-1.85, 1.85]);
+      axes(ctx, V, T, "τ（水平推进）", "z");
+      fieldArrows(ctx, V, T, (x, y) => phi({ x, y }), rgba(T.c7, ph === 3 ? 0.95 : ph === 0 ? 0.28 : 0.5), 8, 5, 18, 1);
+      if (ph === 0) {
+        ctx.fillStyle = T.c6;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("ε = 0.42  有限跳步", V.x0 + 8, V.y0 + 16);
       }
-      S.sim.pts.forEach((p, k) => {
-        const col = [T.c2, T.c3, T.c4, T.c5, T.c6, T.c7, T.c2][k];
-        if (ph !== 0) {
-          ctx.strokeStyle = col;
-          ctx.lineWidth = 1.7;
+      const nShow = [3, 4, 7, 7][ph];
+      const cols = [T.c2, T.c3, T.c4, T.c5, T.c6, T.c7, T.c2];
+      for (let i = 0; i < nShow; i++) {
+        const y0 = -1.08 + i * 0.32;
+        const z0 = { x: -2.05, y: y0 };
+        const cont = [z0];
+        let z = { x: z0.x, y: z0.y };
+        for (let s = 0; s < 72; s++) {
+          const f = phi(z);
+          z = { x: z.x + 0.048 * f.x, y: z.y + 0.048 * f.y };
+          cont.push(z);
+        }
+        const disc = [z0];
+        z = { x: z0.x, y: z0.y };
+        for (let s = 0; s < 8; s++) {
+          const f = phi(z);
+          z = { x: z.x + 0.42 * f.x, y: z.y + 0.42 * f.y };
+          disc.push(z);
+        }
+        if (ph >= 1) {
+          ctx.strokeStyle = cols[i];
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
-          p.cont.forEach((q, i) => {
+          cont.forEach((q, k) => {
             const px = V.X(q.x), py = V.Y(q.y);
-            if (i) ctx.lineTo(px, py);
-            else ctx.moveTo(px, py);
+            if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
           });
           ctx.stroke();
         }
-        if (ph === 0 || ph === 1) {
-          ctx.strokeStyle = rgba(T.c6, 0.95);
-          ctx.lineWidth = 2;
+        if (ph <= 1) {
+          ctx.strokeStyle = T.c6;
+          ctx.lineWidth = 2.2;
           ctx.beginPath();
-          p.disc.forEach((q, i) => {
+          disc.forEach((q, k) => {
             const px = V.X(q.x), py = V.Y(q.y);
-            if (i) ctx.lineTo(px, py);
-            else ctx.moveTo(px, py);
+            if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
           });
           ctx.stroke();
-          p.disc.forEach((q) => {
+          disc.forEach((q) => {
             ctx.fillStyle = T.c6;
             ctx.beginPath();
-            ctx.arc(V.X(q.x), V.Y(q.y), 3.2, 0, TWO);
+            ctx.arc(V.X(q.x), V.Y(q.y), 3.4, 0, TWO);
             ctx.fill();
           });
         }
-        const last = p.cont[p.cont.length - 1];
-        ctx.fillStyle = col;
+        const last = ph === 0 ? disc[disc.length - 1] : cont[cont.length - 1];
+        ctx.fillStyle = cols[i];
         ctx.beginPath();
-        ctx.arc(V.X(last.x), V.Y(last.y), 4.5, 0, TWO);
+        ctx.arc(V.X(last.x), V.Y(last.y), 5, 0, TWO);
         ctx.fill();
-      });
-      const msgs = ["离散跳步 z←z+εφ", "ε→0 变成连续曲线", "多粒子并行积分", "φ 改方向，整族转向"];
-      caption(ctx, S, T, msgs[ph], true);
+      }
+      if (ph === 3) {
+        ctx.fillStyle = T.c6;
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillText("φ 反向：整族轨迹对折", V.x0 + 8, V.y0 + 16);
+      }
+      caption(ctx, S, T, ["离散跳步 z←z+εφ", "ε→0 变成连续曲线", "多粒子并行积分", "φ 改方向，整族转向"][ph], true);
       legend(ctx, [
         { c: T.c6, lab: "欧拉折线" },
         { c: T.c2, lab: "连续轨迹" },
         { c: T.c7, lab: "φ 场" },
-      ], S.W - 118, 42, T);
+      ], S.W - 118, 46, T);
     },
   };
 
   /* ============================================================
-   * 4. 蒙特卡洛期望
+   * 4. 蒙特卡洛期望  E_Q[f] ≈ (1/M) Σ f(z_i)
    * ============================================================ */
   OP.monte_carlo_expectation = {
     init(S) {
       const rng = rngFn(41);
-      S.sim = { rng, pts: [], hits: 0, hist: [], histM: [], biasPts: [], biasEst: 0, trueSec: 1 };
+      const darts = [];
+      for (let i = 0; i < 280; i++) {
+        const x = rng() * 2 - 1, y = rng() * 2 - 1;
+        darts.push({ x, y, hit: x * x + y * y <= 1 });
+      }
+      const bias = [];
+      for (let i = 0; i < 280; i++) {
+        let z = randn(rng);
+        if (Math.abs(z) > 0.85) z = rng() * 1.6 - 0.8;
+        bias.push(z);
+      }
+      const curveM = [], curveE = [], curveT = [];
+      let hits = 0;
+      for (let m = 1; m <= 280; m++) {
+        if (darts[m - 1].hit) hits++;
+        if (m % 4 === 0 || m < 8) {
+          curveM.push(m);
+          curveE.push(Math.abs(4 * hits / m - PI));
+          curveT.push(1 / Math.sqrt(m));
+        }
+      }
+      S.sim = { darts, bias, curveM, curveE, curveT };
       bind(S, "monte_carlo_expectation");
     },
     tick(S) {
       const { ph } = phof(S);
       const cap = Math.round(clamp(sl(S, "n", 120), 40, 280));
-      const rng = S.sim.rng;
+      const M = ph === 0 ? 28 : cap;
       if (ph <= 2) {
-        if (S.sim.pts.length > cap) {
-          S.sim.pts = [];
-          S.sim.hits = 0;
-        }
-        const batch = ph === 0 ? 3 : 8;
-        for (let k = 0; k < batch; k++) {
-          const x = rng() * 2 - 1, y = rng() * 2 - 1;
-          const hit = x * x + y * y <= 1;
-          S.sim.pts.push({ x, y, hit });
-          if (hit) S.sim.hits++;
-        }
-        const M = S.sim.pts.length;
-        const est = M ? 4 * S.sim.hits / M : 0;
+        let hits = 0;
+        for (let i = 0; i < M; i++) if (S.sim.darts[i].hit) hits++;
+        const est = 4 * hits / M;
         S.sim.est = est;
         S.sim.err = Math.abs(est - PI);
-        S.sim.theory = 1 / Math.sqrt(Math.max(1, M));
-        push(S.sim.hist, S.sim.err, 80);
-        push(S.sim.histM, M, 80);
-        S.metrics.M = M;
+        S.sim.theory = 1 / Math.sqrt(M);
+        S.sim.M = M;
+        S.metrics.M = String(M);
         S.metrics.pi估 = est;
         S.metrics.绝对误差 = S.sim.err;
         S.metrics.理论1sqrtM = S.sim.theory;
       } else {
-        // 截断采样估 E[z²]，真值=1（标准正态），截断 |z|<0.7 有偏
-        if (S.sim.biasPts.length > cap) S.sim.biasPts = [];
-        for (let k = 0; k < 6; k++) {
-          let z = randn(rng);
-          // 未覆盖尾部：拒绝 |z|>0.85
-          if (Math.abs(z) > 0.85) z = (rng() * 1.6 - 0.8);
-          S.sim.biasPts.push(z);
-        }
-        const M = S.sim.biasPts.length;
+        const M3 = cap;
         let s = 0;
-        for (let i = 0; i < M; i++) s += S.sim.biasPts[i] * S.sim.biasPts[i];
-        S.sim.biasEst = s / M;
-        S.metrics.M = M;
+        for (let i = 0; i < M3; i++) s += S.sim.bias[i] * S.sim.bias[i];
+        S.sim.biasEst = s / M3;
+        S.sim.M = M3;
+        S.metrics.M = String(M3);
         S.metrics.E截断z2 = S.sim.biasEst;
         S.metrics.真值 = 1;
         S.metrics.偏差 = S.sim.biasEst - 1;
@@ -825,11 +861,12 @@
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const msgs = ["随机撒点估 π", "M 增大，估计更稳", "误差 ~ 1/√M", "尾部未覆盖 → 有偏"];
-      caption(ctx, S, T, msgs[ph], true);
+      const cap = Math.round(clamp(sl(S, "n", 120), 40, 280));
+      caption(ctx, S, T, ["随机撒点估 π", "M 增大，估计更稳", "误差 ~ 1/√M", "尾部未覆盖 → 有偏"][ph], true);
       if (ph <= 2) {
-        const side = Math.min(S.W * 0.46, S.H - 78);
-        const x0 = 22, y0 = 34;
+        const M = ph === 0 ? 28 : cap;
+        const side = Math.min(S.W * 0.46, S.H - 86);
+        const x0 = 22, y0 = 36;
         ctx.strokeStyle = T.line;
         ctx.strokeRect(x0, y0, side, side);
         ctx.strokeStyle = T.c5;
@@ -837,62 +874,48 @@
         ctx.beginPath();
         ctx.arc(x0 + side / 2, y0 + side / 2, side / 2, 0, TWO);
         ctx.stroke();
-        const pts = S.sim.pts;
-        const start = Math.max(0, pts.length - 220);
-        for (let i = start; i < pts.length; i++) {
-          const p = pts[i];
+        for (let i = 0; i < M; i++) {
+          const p = S.sim.darts[i];
           ctx.fillStyle = p.hit ? T.c3 : T.c6;
           ctx.beginPath();
-          ctx.arc(x0 + (p.x + 1) / 2 * side, y0 + (1 - p.y) / 2 * side, i > pts.length - 10 ? 4.5 : 2.1, 0, TWO);
+          ctx.arc(x0 + (p.x + 1) / 2 * side, y0 + (1 - p.y) / 2 * side, ph === 0 ? 3.6 : 2.0, 0, TWO);
           ctx.fill();
         }
-        // 右：误差曲线
-        const rx = x0 + side + 16;
-        const rw = S.W - rx - 16;
-        panel(ctx, rx, 34, rw, S.H - 72, T, ph === 2);
+        const rx = x0 + side + 16, rw = S.W - rx - 16;
+        panel(ctx, rx, 36, rw, S.H - 80, T, ph === 2);
         ctx.fillStyle = T.tx;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("π ≈ " + (S.sim.est || 0).toFixed(4), rx + 10, 56);
-        ctx.fillStyle = T.mu;
-        ctx.fillText("真值 3.14159", rx + 10, 74);
-        spark(ctx, S.sim.hist, rx + 10, 96, rw - 20, 70, T.c6, T);
+        ctx.font = "13px sans-serif";
+        ctx.fillText("π ≈ " + (S.sim.est || 0).toFixed(4), rx + 10, 58);
         ctx.fillStyle = T.mu;
         ctx.font = "11px sans-serif";
-        ctx.fillText("绝对误差轨迹", rx + 10, 90);
-        // 1/sqrt(M) 对照柱
-        const err = S.sim.err || 0;
-        const th = S.sim.theory || 0.1;
-        const H = 70, by = S.H - 90;
-        ctx.fillStyle = T.c6;
-        ctx.fillRect(rx + 18, by - Math.min(H, err / 0.4 * H), 22, Math.min(H, err / 0.4 * H));
-        ctx.fillStyle = T.c2;
-        ctx.fillRect(rx + 52, by - Math.min(H, th / 0.4 * H), 22, Math.min(H, th / 0.4 * H));
+        ctx.fillText("真值 3.14159   M=" + M, rx + 10, 76);
+        const cut = Math.max(2, Math.floor(S.sim.curveM.length * M / 280));
+        spark(ctx, S.sim.curveE.slice(0, cut), rx + 10, 100, rw - 20, 64, T.c6, T);
         ctx.fillStyle = T.mu;
-        ctx.fillText("误差", rx + 16, by + 14);
-        ctx.fillText("1/√M", rx + 50, by + 14);
+        ctx.fillText("绝对误差 vs M", rx + 10, 96);
+        vbar(ctx, rx + 16, S.H - 150, 28, 56, S.sim.err || 0, 0.35, T.c6, "误差", T);
+        vbar(ctx, rx + 56, S.H - 150, 28, 56, S.sim.theory || 0, 0.35, T.c2, "1/√M", T);
+        if (ph === 2) {
+          ctx.fillStyle = T.c5;
+          ctx.font = "11px sans-serif";
+          ctx.fillText("误差按 1/√M 下降", rx + 10, S.H - 78);
+        }
       } else {
-        const B = padBox(S, { t: 8 });
-        const xmin = -3, xmax = 3;
-        const X = (x) => B.x0 + (x - xmin) / 6 * (B.x1 - B.x0);
-        const trueN = sample1d(120, xmin, xmax, (x) => gauss(x, 0, 1));
-        const ymax = 0.48;
-        const Y = (y) => B.y1 - y / ymax * (B.y1 - B.y0 - 10);
-        axes(ctx, B, T, "z", "密度");
-        area(ctx, trueN.xs, trueN.ys, X, Y, B.y1, rgba(T.c2, 0.2));
-        curve(ctx, trueN.xs, trueN.ys, X, Y, T.c2, 2);
-        // 截断窗
+        const B = padBox(S, { t: 6 });
+        const { X, Y } = plotCurves(ctx, B, T, -3, 3, [{ fn: (x) => gauss(x, 0, 1), col: T.c2, fillA: 0.2, lw: 2 }], "z");
         ctx.fillStyle = rgba(T.c6, 0.12);
         ctx.fillRect(X(-0.85), B.y0, X(0.85) - X(-0.85), B.y1 - B.y0);
         ctx.strokeStyle = T.c6;
         ctx.setLineDash([5, 4]);
         ctx.strokeRect(X(-0.85), B.y0, X(0.85) - X(-0.85), B.y1 - B.y0);
         ctx.setLineDash([]);
-        (S.sim.biasPts || []).slice(-80).forEach((z) => {
+        const M3 = cap;
+        for (let i = 0; i < Math.min(M3, 120); i++) {
           ctx.fillStyle = T.c5;
           ctx.beginPath();
-          ctx.arc(X(clamp(z, -2.9, 2.9)), B.y1 - 6, 3, 0, TWO);
+          ctx.arc(X(clamp(S.sim.bias[i], -2.9, 2.9)), B.y1 - 6, 3, 0, TWO);
           ctx.fill();
-        });
+        }
         ctx.fillStyle = T.tx;
         ctx.font = "12px sans-serif";
         ctx.fillText("E[z²] 截断估 " + (S.sim.biasEst || 0).toFixed(3) + "  ≠  1（尾部缺失）", B.x0 + 8, B.y0 + 14);
@@ -906,81 +929,62 @@
   OP.control_affine_perturbation = {
     init(S) {
       const rng = rngFn(51);
-      S.sim = { rng, pts: makeCloud(rng, 22, -0.2, 0, 0.55, 0.45), osc: 0 };
+      S.sim = { rng, pts0: makeCloud(rng, 22, -0.2, 0, 0.55, 0.45) };
       bind(S, "control_affine_perturbation");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const sig = clamp(sl(S, "sig", 0.35), 0.04, 0.95);
-      S.sim.sig = sig;
-      // u：旋转 + 轻度收缩，强度随 sig（噪声/增益）
       const amp = 0.35 + sig * 1.4;
-      let energy = 0, nrm = 0;
-      S.sim.pts.forEach((p) => {
-        const P = post2d(p.x, p.y);
-        const ux = -amp * p.y - 0.15 * p.x;
-        const uy = amp * p.x - 0.15 * p.y;
-        const phx = P.sx + ux, phy = P.sy + uy;
-        energy += 0.5 * (ux * ux + uy * uy);
-        nrm += hypot(phx, phy);
-        if (ph >= 2) {
-          p.x += phx * dt * 0.55;
-          p.y += phy * dt * 0.55;
-        } else if (ph === 0) {
-          p.x += P.sx * dt * 0.35;
-          p.y += P.sy * dt * 0.35;
-        } else {
-          p.x += ux * dt * 0.4;
-          p.y += uy * dt * 0.4;
-        }
-        p.x = clamp(p.x, -2.4, 2.4);
-        p.y = clamp(p.y, -1.6, 1.6);
+      const fnP = (p) => { const P = post2d(p.x, p.y); return { x: P.sx, y: P.sy }; };
+      const fnU = (p) => ({ x: -amp * p.y - 0.15 * p.x, y: amp * p.x - 0.15 * p.y });
+      const fnF = (p) => { const a = fnP(p), b = fnU(p); return { x: a.x + b.x, y: a.y + b.y }; };
+      const steps = [0, 0, 14, 24][ph];
+      const fn = [fnP, fnU, fnF, fnF][ph];
+      const pts = evolveCloud(S.sim.pts0, steps, 0.08, fn);
+      let energy = 0, nrm = 0, osc = 0;
+      pts.forEach((p) => {
+        const u = fnU(p), f = fnF(p);
+        energy += 0.5 * (u.x * u.x + u.y * u.y);
+        nrm += hypot(f.x, f.y);
+        osc += p.x * u.x + p.y * u.y;
       });
-      if (ph === 3) {
-        // 过冲检测：径向速度
-        S.sim.osc = S.sim.pts.reduce((s, p) => s + p.x * (-amp * p.y) + p.y * (amp * p.x), 0) / S.sim.pts.length;
-      }
-      if (S.frame % 180 === 0) {
-        S.sim.pts = makeCloud(S.sim.rng, 22, -0.2, 0, 0.55, 0.45);
-      }
+      S.sim.pts = pts;
+      S.sim.amp = amp;
       S.metrics.噪声 = sig;
-      S.metrics.控制能 = energy / S.sim.pts.length;
-      S.metrics.φ范数 = nrm / S.sim.pts.length;
-      S.metrics.过冲指示 = S.sim.osc || 0;
+      S.metrics.控制能 = energy / pts.length;
+      S.metrics.φ范数 = nrm / pts.length;
+      S.metrics.过冲指示 = osc / pts.length;
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
       const V = view2d(S);
-      const sig = S.sim.sig || 0.35;
-      const amp = 0.35 + sig * 1.4;
-      heat2d(ctx, V, T, T.c6, 22, 13);
+      const amp = S.sim.amp != null ? S.sim.amp : 0.7;
+      heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
-      const scP = (x, y) => {
-        const P = post2d(x, y);
-        return { x: P.sx, y: P.sy };
-      };
+      modeLabels(ctx, V, T);
+      const scP = (x, y) => { const P = post2d(x, y); return { x: P.sx, y: P.sy }; };
       const scU = (x, y) => ({ x: -amp * y - 0.15 * x, y: amp * x - 0.15 * y });
-      const scF = (x, y) => {
-        const a = scP(x, y), b = scU(x, y);
-        return { x: a.x + b.x, y: a.y + b.y };
-      };
-      if (ph === 0) fieldArrows(ctx, V, T, scP, rgba(T.mu, 0.95), 8, 5, 14);
-      if (ph === 1) fieldArrows(ctx, V, T, scU, T.c6, 8, 5, 14);
-      if (ph === 2) fieldArrows(ctx, V, T, scF, T.c5, 8, 5, 14);
+      const scF = (x, y) => { const a = scP(x, y), b = scU(x, y); return { x: a.x + b.x, y: a.y + b.y }; };
+      if (ph === 0) fieldArrows(ctx, V, T, scP, T.mu, 8, 5, 15);
+      if (ph === 1) fieldArrows(ctx, V, T, scU, T.c6, 8, 5, 16);
+      if (ph === 2) fieldArrows(ctx, V, T, scF, T.c5, 8, 5, 15);
       if (ph === 3) {
         fieldArrows(ctx, V, T, scP, rgba(T.mu, 0.35), 6, 4, 10);
-        fieldArrows(ctx, V, T, scU, rgba(T.c6, 0.7), 6, 4, 10);
-        fieldArrows(ctx, V, T, scF, T.c5, 8, 5, 16);
+        fieldArrows(ctx, V, T, scU, rgba(T.c6, 0.75), 6, 4, 12);
+        fieldArrows(ctx, V, T, scF, T.c5, 8, 5, 17);
+        ctx.fillStyle = T.c6;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("u 过大 → 旋转过冲", V.x0 + 8, V.y0 + 16);
       }
-      dots(ctx, S.sim.pts, V, T.c2, 4);
-      const msgs = ["后验得分 ∇log P（灰）", "控制 u（红）", "合成 φ = 得分 + u", "调 u：过冲 / 振荡"];
-      caption(ctx, S, T, msgs[ph], true);
+      dots(ctx, S.sim.pts || S.sim.pts0, V, T.c2, ph === 0 ? 5 : 4);
+      caption(ctx, S, T, ["后验得分 ∇log P（灰）", "控制 u（红）", "合成 φ = 得分 + u", "调 u：过冲 / 振荡"][ph], true);
       legend(ctx, [
         { c: T.mu, lab: "∇log P" },
         { c: T.c6, lab: "u(z)" },
         { c: T.c5, lab: "φ 合成" },
         { c: T.c2, lab: "粒子" },
-      ], S.W - 118, 42, T);
+      ], S.W - 118, 46, T);
     },
   };
 
@@ -1023,19 +1027,24 @@
     },
     tick(S) {
       const { ph } = phof(S);
-      const uamp = clamp(sl(S, "uamp", 0.4)5, 0, 1.3);
-      const Tlist = [0.35, 0.35, 1.2, 1.2];
-      const Ulist = [0.25, uamp, uamp, uamp];
+      const uamp = clamp(sl(S, "uamp", 0.45), 0, 1.3);
+      const Tlist = [0.28, 0.32, 1.35, 1.35];
+      const Ulist = [0.18, Math.max(0.85, uamp), 0.35 + 0.35 * uamp, uamp];
       const Tmax = Tlist[ph];
       const u = Ulist[ph];
       const key = ph + ":" + u.toFixed(2) + ":" + Tmax.toFixed(2);
       if (S.sim.lastKey !== key) {
         S.sim.lastKey = key;
-        S.sim.roll = ocRollout(u, Tmax, 40);
+        S.sim.roll = ocRollout(u, Tmax, 36);
+        if (ph === 3) {
+          S.sim.pareto = [0.15, 0.4, 0.7, 1.0, 1.3].map((uu) => {
+            const r = ocRollout(uu, Tmax, 28);
+            return { u: uu, kl: r.kl, energy: r.energy, F: r.kl + r.energy };
+          });
+        }
       }
       const r = S.sim.roll;
       const F = r.kl + r.energy;
-      push(S.sim.hist, F, 60);
       S.sim.uamp = uamp;
       S.sim.Tmax = Tmax;
       S.metrics.时域T = Tmax;
@@ -1045,55 +1054,40 @@
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const r = S.sim.roll || { xs: [], kl: 0, energy: 0, means: [] };
-      const B = padBox(S, { r: 150 });
-      const xmin = -3, xmax = 3;
-      const X = (x) => B.x0 + (x - xmin) / 6 * (B.x1 - B.x0);
-      const trueY = sample1d(100, xmin, xmax, mixDens);
-      const kde = sample1d(100, xmin, xmax, (x) => kde1d(r.xs, x, 0.32).q);
-      let ymax = 0.02;
-      trueY.ys.forEach((v) => { if (v > ymax) ymax = v; });
-      kde.ys.forEach((v) => { if (v > ymax) ymax = v; });
-      ymax *= 1.2;
-      const Y = (y) => B.y1 - y / ymax * (B.y1 - B.y0);
-      axes(ctx, B, T, "z", "Q_T / P");
-      area(ctx, trueY.xs, trueY.ys, X, Y, B.y1, rgba(T.c6, 0.16));
-      curve(ctx, trueY.xs, trueY.ys, X, Y, T.c6, 2);
-      curve(ctx, kde.xs, kde.ys, X, Y, T.c2, 2.2);
+      const r = S.sim.roll || { xs: [], kl: 0, energy: 0 };
+      const B = padBox(S, { r: 154 });
+      plotCurves(ctx, B, T, -3, 3, [
+        { fn: mixDens, col: T.c6, fillA: 0.16, lw: 2 },
+        { fn: (x) => kde1d(r.xs || [], x, 0.32).q, col: T.c2, fillA: 0.12, lw: 2.2 },
+      ], "z");
+      const X = (x) => B.x0 + (x + 3) / 6 * (B.x1 - B.x0);
       (r.xs || []).forEach((z) => {
         ctx.fillStyle = T.c5;
         ctx.beginPath();
-        ctx.arc(X(z), B.y1 - 6, 3.2, 0, TWO);
+        ctx.arc(X(z), B.y1 - 5, 3.2, 0, TWO);
         ctx.fill();
       });
-      // 右柱：KL vs 能量
+      ctx.fillStyle = T.mu;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("T=" + (S.sim.Tmax || 0).toFixed(2), B.x0 + 8, B.y0 + 12);
       const rx = B.x1 + 12;
-      panel(ctx, rx, 32, 136, S.H - 68, T, ph >= 2);
-      const mx = Math.max(0.15, r.kl, r.energy, r.kl + r.energy);
-      const colH = S.H - 140;
-      const bar = (lab, v, c, x) => {
-        const h = v / mx * colH;
-        ctx.fillStyle = c;
-        ctx.fillRect(x, 56 + colH - h, 28, h);
-        ctx.fillStyle = T.mu;
+      panel(ctx, rx, 36, 140, S.H - 82, T, ph >= 2);
+      const mx = Math.max(0.2, r.kl, r.energy, r.kl + r.energy);
+      vbar(ctx, rx + 12, 50, 28, S.H - 170, r.kl, mx, T.c6, "KL", T);
+      vbar(ctx, rx + 52, 50, 28, S.H - 170, r.energy, mx, T.c5, "能量", T);
+      vbar(ctx, rx + 92, 50, 28, S.H - 170, r.kl + r.energy, mx, T.c3, "F", T);
+      if (ph === 3 && S.sim.pareto) {
+        ctx.fillStyle = T.c5;
         ctx.font = "10px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(lab, x + 14, 56 + colH + 14);
-        ctx.fillStyle = T.tx;
-        ctx.fillText(v.toFixed(2), x + 14, 50 + colH - h);
-      };
-      bar("KL", r.kl, T.c6, rx + 12);
-      bar("能量", r.energy, T.c5, rx + 52);
-      bar("F", r.kl + r.energy, T.c3, rx + 92);
-      ctx.textAlign = "left";
-      const msgs = [
+        ctx.fillText("Pareto u↦F", rx + 10, S.H - 78);
+        spark(ctx, S.sim.pareto.map((p) => p.F), rx + 10, S.H - 74, 118, 22, T.c3, T);
+      }
+      caption(ctx, S, T, [
         "短 T：来不及靠近，终端 KL 大",
         "加大控制：KL 降、能量升",
         "折中出现（F=KL+能量）",
         "T 固定时的最优权衡",
-      ];
-      caption(ctx, S, T, msgs[ph], true);
-      spark(ctx, S.sim.hist, rx + 10, S.H - 86, 116, 28, T.c3, T);
+      ][ph], true);
     },
   };
 
@@ -1106,7 +1100,7 @@
       bind(S, "infinite_horizon_oc_cost");
     },
     tick(S) {
-      const uamp = clamp(sl(S, "uamp", 0.4)5, 0, 1.3);
+      const uamp = clamp(sl(S, "uamp", 0.45), 0, 1.3);
       if (Math.abs(uamp - S.sim.lastU) > 0.04 || !S.sim.sweeps.length) {
         S.sim.lastU = uamp;
         const Ts = [0.25, 0.6, 1.2, 2.4, 4.0];
@@ -1116,7 +1110,7 @@
         });
       }
       const { ph } = phof(S);
-      const idx = ph === 3 ? S.sim.sweeps.length - 1 : Math.min(S.sim.sweeps.length - 1, ph + 1);
+      const idx = [0, 1, 4, 4][ph];
       const cur = S.sim.sweeps[idx];
       S.sim.idx = idx;
       S.metrics.T = cur.T;
@@ -1179,11 +1173,32 @@
         ctx.fillText("T" + s.T.toFixed(1), bx + bw * 0.35, y0 + h - 12);
       });
       ctx.textAlign = "left";
-      if (ph === 3) {
-        ctx.fillStyle = T.c3;
+      /* 无穷时域：协态渐近包络 λ(t)~e^{-αt} → 0 */
+      if (ph >= 2) {
+        const ex0 = 28, ey0 = S.H * 0.58, ew = S.W * 0.44, eh = 46;
+        ctx.strokeStyle = T.c7;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        for (let i = 0; i <= 40; i++) {
+          const t = i / 40;
+          const px = ex0 + t * ew;
+          const py = ey0 + 8 + (1 - Math.exp(-2.6 * t)) * (eh - 16);
+          if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = T.c7;
         ctx.font = "11px sans-serif";
-        ctx.fillText("有限时域：双目标  F=KL_T + ∫u²/2", 28, S.H * 0.68);
-        ctx.fillText("无穷时域：假设 KL_∞=0，只剩 ∫_0^∞ u²/2", 28, S.H * 0.68 + 16);
+        ctx.fillText("渐近包络  λ(t)→0 = 无穷时域横截", ex0, ey0);
+      }
+      if (ph === 3) {
+        panel(ctx, 24, S.H * 0.72, S.W * 0.46, S.H * 0.16, T, true);
+        ctx.fillStyle = T.c6;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("有限时域：双目标", 36, S.H * 0.72 + 16);
+        ctx.fillStyle = T.tx;
+        ctx.font = "11px sans-serif";
+        ctx.fillText("F = KL + ∫‖u‖²/2；无穷时域横截 λ(∞)=0 后只剩能量", 36, S.H * 0.72 + 36);
       }
     },
   };
@@ -1198,7 +1213,7 @@
       bind(S, "hamiltonian_infinite_horizon");
     },
     tick(S) {
-      const uamp = clamp(sl(S, "uamp", 0.4)5, 0, 1.3);
+      const uamp = clamp(sl(S, "uamp", 0.45), 0, 1.3);
       const z0 = 0.55 + 0.4 * Math.sin(S.t * 0.35);
       S.sim.z0 = z0;
       const scQ = kdeScore2d(S.sim.pts, z0, 0, 0.45);
@@ -1215,12 +1230,12 @@
       S.sim.phi = scP.sx + S.sim.uStar;
       S.metrics.score_Q = sQ;
       S.metrics.u星 = S.sim.uStar;
-      S.metrics.H星 = S.sim.Hstar;
-      S.metrics.φ净 = S.sim.phi;
+      S.metrics.试探u = S.sim.uTrial;
+      S.metrics.H试探 = S.sim.Htrial;
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const left = { x0: 24, y0: 36, x1: S.W * 0.5 - 8, y1: S.H - 36 };
+      const left = { x0: 24, y0: 40, x1: S.W * 0.5 - 8, y1: S.H - 40 };
       const sQ = S.sim.sQ || 0;
       const H = (u) => 0.5 * u * u + u * sQ;
       const us = linspace(-2.4, 2.4, 80);
@@ -1230,6 +1245,10 @@
       const X = (u) => left.x0 + (u + 2.4) / 4.8 * (left.x1 - left.x0);
       const Y = (h) => left.y1 - (h - hmn) / (hmx - hmn || 1) * (left.y1 - left.y0 - 8);
       panel(ctx, left.x0 - 6, left.y0 - 8, left.x1 - left.x0 + 12, left.y1 - left.y0 + 16, T, ph <= 2);
+      ctx.fillStyle = T.mu;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("u", (left.x0 + left.x1) / 2, left.y1 + 12);
+      ctx.fillText("H", left.x0 + 6, left.y0 + 4);
       ctx.strokeStyle = T.line;
       ctx.beginPath();
       ctx.moveTo(left.x0, Y(0));
@@ -1244,7 +1263,6 @@
         else ctx.moveTo(px, py);
       });
       ctx.stroke();
-      // 约束线性项
       if (ph >= 1) {
         ctx.strokeStyle = T.c7;
         ctx.setLineDash([5, 3]);
@@ -1261,16 +1279,31 @@
       if (ph >= 2) {
         ctx.fillStyle = T.c6;
         ctx.beginPath();
-        ctx.arc(X(S.sim.uStar), Y(S.sim.Hstar), 6, 0, TWO);
+        ctx.arc(X(S.sim.uStar), Y(S.sim.Hstar), 7, 0, TWO);
         ctx.fill();
         ctx.fillStyle = T.c6;
         ctx.font = "11px sans-serif";
         ctx.fillText("u* = −∇log Q", X(S.sim.uStar) + 8, Y(S.sim.Hstar) - 6);
       }
+      const ut = S.sim.uTrial, Ht = S.sim.Htrial;
+      ctx.strokeStyle = T.c5;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(X(ut), left.y0);
+      ctx.lineTo(X(ut), left.y1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = rgba(T.c5, 0.22);
+      ctx.fillRect(X(ut) - 7, left.y0, 14, left.y1 - left.y0);
       ctx.fillStyle = T.c5;
       ctx.beginPath();
-      ctx.arc(X(S.sim.uTrial), Y(S.sim.Htrial), 5, 0, TWO);
+      ctx.arc(X(ut), Y(Ht), 8, 0, TWO);
       ctx.fill();
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = T.c5;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("试探 u=" + ut.toFixed(2) + "  H=" + Ht.toFixed(2), left.x0 + 8, left.y0 + 16);
       // 右：场（独立坐标，避免 view2d 闭包仍用旧 x0）
       const VR = {
         x0: S.W * 0.52, y0: 36, x1: S.W - 16, y1: S.H - 36,
@@ -1292,6 +1325,7 @@
         ctx.fillText("φ = ∇log P − ∇log Q", VR.x0 + 8, VR.y0 + 14);
       } else {
         dots(ctx, S.sim.pts, VR, T.c2, 3.5);
+        vbar(ctx, VR.x1 - 42, VR.y0 + 10, 26, VR.h - 36, 0.5 * ut * ut, 2.6, T.c5, "½u²", T);
       }
       const msgs = [
         "H 作为 u 的二次函数",
@@ -1323,87 +1357,88 @@
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const B = padBox(S, { r: 8, b: 4 });
+      const B = padBox(S, { r: 8 });
       const xmin = -2.6, xmax = 2.6;
       const X = (x) => B.x0 + (x - xmin) / (xmax - xmin) * (B.x1 - B.x0);
       const m = 0;
       const w = clamp(sl(S, "uamp", 1), 0.2, 2);
-      const s = 0.22 + 0.38 / Math.max(0.25, w); /* 终端权重大 → Q 更尖、λ 尾部更高 */
-      S.sim.s = s;
+      const s = 0.22 + 0.38 / Math.max(0.25, w);
       const Q = (x) => gauss(x, m, s);
       const lam = (x) => w / (Q(x) + 0.05);
       const qs = sample1d(120, xmin, xmax, Q);
       const ls = sample1d(120, xmin, xmax, lam);
       let qmx = 0.01;
       qs.ys.forEach((v) => { if (v > qmx) qmx = v; });
-      const lmx = 8 + 18 * w; /* 固定随 w 变的纵轴，避免归一化把权重吃掉 */
-      const Yq = (y) => B.y1 - 8 - y / (qmx * 1.15) * (B.y1 - B.y0 - 20);
-      const Yl = (y) => B.y1 - 8 - y / (lmx * 1.15) * (B.y1 - B.y0 - 20);
-      axes(ctx, B, T, "z", "");
+      const lmx = 8 + 18 * w;
+      const Yq = (y) => B.y1 - y / (qmx * 1.15) * (B.y1 - B.y0);
+      const Yl = (y) => B.y1 - y / (lmx * 1.15) * (B.y1 - B.y0);
+      axes(ctx, B, T, ph === 0 ? "时间 τ" : "z", "");
       if (ph === 0) {
-        // λ(t) 水平
-        const ts = linspace(0, 1, 40);
-        ctx.strokeStyle = T.c7;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ts.forEach((t, i) => {
-          const px = B.x0 + t * (B.x1 - B.x0);
-          const py = B.y0 + 40 + 8 * Math.sin(0.2); // 几乎平
-          if (i) ctx.lineTo(px, py);
-          else ctx.moveTo(px, py);
+        const ys = [0.28, 0.48, 0.68];
+        const cols = [T.c7, T.c2, T.c5];
+        ys.forEach((yy, k) => {
+          ctx.strokeStyle = cols[k];
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(B.x0, B.y0 + 24 + yy * (B.y1 - B.y0));
+          ctx.lineTo(B.x1, B.y0 + 24 + yy * (B.y1 - B.y0));
+          ctx.stroke();
+          ctx.fillStyle = cols[k];
+          ctx.font = "11px sans-serif";
+          ctx.fillText("λ(z=" + [-1.2, 0, 1.2][k] + ") 常数", B.x0 + 8, B.y0 + 18 + yy * (B.y1 - B.y0));
         });
-        ctx.stroke();
         ctx.fillStyle = T.c7;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("λ̇ = −∂H/∂Q = 0  →  λ 不随时间变", B.x0 + 8, B.y0 + 18);
-      }
-      area(ctx, qs.xs, qs.ys, X, Yq, B.y1 - 8, rgba(T.c2, ph === 0 ? 0.08 : 0.22));
-      curve(ctx, qs.xs, qs.ys, X, Yq, T.c2, 2);
-      if (ph >= 2) {
-        curve(ctx, ls.xs, ls.ys, X, Yl, T.c6, 2.2);
-        ctx.fillStyle = T.c6;
-        ctx.font = "11px sans-serif";
-        ctx.fillText("λ = 1/Q  （密度低处定价更高）", B.x0 + 8, B.y0 + 16);
+        ctx.font = "13px sans-serif";
+        ctx.fillText("λ̇ = −∂H/∂Q = 0  →  伴随不随时间变", B.x0 + 8, B.y0 + 16);
+      } else {
+        area(ctx, qs.xs, qs.ys, X, Yq, B.y1, rgba(T.c2, 0.22));
+        curve(ctx, qs.xs, qs.ys, X, Yq, T.c2, 2);
       }
       if (ph === 1) {
         ctx.strokeStyle = T.c5;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
-        ctx.moveTo(X(2.15), Yq(Q(2.15)));
-        ctx.lineTo(X(2.15), Yl(lam(2.15)));
+        ctx.moveTo(X(2.05), Yq(Q(2.05)));
+        ctx.lineTo(X(2.05), Yl(Math.min(lmx, lam(2.05))));
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = T.c5;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("终端 KL 变分  配平 λ", X(0.2), B.y0 + 18);
-        ctx.fillStyle = T.c5;
         ctx.beginPath();
-        ctx.arc(X(2.15), Yq(Q(2.15)), 5, 0, TWO);
+        ctx.arc(X(2.05), Yq(Q(2.05)), 6, 0, TWO);
         ctx.fill();
+        ctx.font = "12px sans-serif";
+        ctx.fillText("终端 KL 变分  配平 λ 边值", B.x0 + 8, B.y0 + 16);
+        ctx.fillStyle = T.mu;
+        ctx.fillText("尾部 Q 小 → 需要更大的 λ 来配平", B.x0 + 8, B.y0 + 34);
+      }
+      if (ph >= 2) {
+        curve(ctx, ls.xs, ls.ys, X, Yl, T.c6, 2.4);
+        ctx.fillStyle = T.c6;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("λ = w/Q  （密度低处定价更高）", B.x0 + 8, B.y0 + 16);
       }
       if (ph === 3) {
         for (let i = 0; i < 9; i++) {
           const x = -2.1 + i * 0.52;
-          const sc = -(x - m) / (s * s); // ∇log Q
-          arrow(ctx, X(x), Yq(Q(x)), -sc * 16, 0, T.c5, 1.6);
+          const sc = -(x - m) / (s * s);
+          arrow(ctx, X(x), Yq(Q(x)), -sc * 18, 0, T.c5, 1.8);
         }
         ctx.fillStyle = T.c5;
         ctx.font = "12px sans-serif";
-        ctx.fillText("驻点：u* = −∇log Q = −∇Q / Q", B.x0 + 8, B.y0 + 34);
+        ctx.fillText("驻点：u* = −∇log Q = −∇Q / Q", B.x0 + 8, B.y0 + 36);
       }
       const bh = 24 + 88 * ((w - 0.2) / 1.8);
-      ctx.fillStyle = rgba(T.c5, 0.85);
-      ctx.fillRect(B.x1 - 20, B.y1 - bh, 12, bh);
+      ctx.fillStyle = rgba(T.c5, 0.9);
+      ctx.fillRect(B.x1 - 18, B.y1 - bh, 12, bh);
       ctx.fillStyle = T.mu;
       ctx.font = "10px sans-serif";
-      ctx.fillText("w=" + w.toFixed(2), B.x1 - 48, B.y1 - bh - 6);
+      ctx.fillText("w=" + w.toFixed(2), B.x1 - 52, B.y1 - bh - 6);
       legend(ctx, [
         { c: T.c2, lab: "Q(z)" },
         { c: T.c6, lab: "λ=w/Q" },
         { c: T.c5, lab: "−∇log Q" },
-      ], S.W - 120, 42, T);
-      const msgs = ["λ 随时间不变", "用终端 KL 变分配平", "得到 λ=1/Q", "代入驻点出现 −∇log Q"];
-      caption(ctx, S, T, msgs[ph], true);
+      ], S.W - 120, 46, T);
+      caption(ctx, S, T, ["λ 随时间不变", "用终端 KL 变分配平", "得到 λ=1/Q", "代入驻点出现 −∇log Q"][ph], true);
     },
   };
 
@@ -1412,94 +1447,68 @@
    * ============================================================ */
   OP.optimal_control_law = {
     init(S) {
-      const rng = rngFn(101);
-      S.sim = { rng, pts: makeCloud(rng, 26, -0.15, 0.05, 0.62, 0.48), eq: false };
+      S.sim = {};
       bind(S, "optimal_control_law");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const sig = clamp(sl(S, "sig", 0.35), 0.04, 0.95);
       const h = 0.28 + 0.5 * sig;
+      const pack = cachedSnaps(S, "ocLaw", h, 101, 24, 10, { mx: -0.1, my: 0, sx: 0.62, sy: 0.48 });
+      const pts = pack.snaps[[0, 0, 1, 3][ph]];
       S.sim.h = h;
+      S.sim.pts = pts;
       let nU = 0, nPhi = 0, nQ = 0;
-      const acc = rkhs(S.sim.pts, h); // 用 RKHS 近似 −∇log Q 的可运行版；同时算显式 KDE 得分
-      S.sim.pts.forEach((p, i) => {
-        const Q = kdeScore2d(S.sim.pts, p.x, p.y, h);
+      pts.forEach((p) => {
+        const Q = kdeScore2d(pts, p.x, p.y, h);
         const P = post2d(p.x, p.y);
-        p.ux = -Q.sx;
-        p.uy = -Q.sy;
-        p.qx = Q.sx;
-        p.qy = Q.sy;
-        p.px = P.sx;
-        p.py = P.sy;
-        p.fx = P.sx - Q.sx;
-        p.fy = P.sy - Q.sy;
-        nU += hypot(p.ux, p.uy);
-        nPhi += hypot(p.fx, p.fy);
-        nQ += hypot(p.qx, p.qy);
-        if (ph >= 2) {
-          // 沿净场走；第 4 步时若已接近则几乎静止
-          const k = ph === 3 ? 0.15 : 0.7;
-          p.x += p.fx * dt * k;
-          p.y += p.fy * dt * k;
-          p.x = clamp(p.x, -2.4, 2.4);
-          p.y = clamp(p.y, -1.55, 1.55);
-        }
+        nU += hypot(Q.sx, Q.sy);
+        nQ += hypot(Q.sx, Q.sy);
+        nPhi += hypot(P.sx - Q.sx, P.sy - Q.sy);
       });
-      const n = S.sim.pts.length;
+      const n = pts.length;
       S.metrics.σ = sig;
       S.metrics.u范数 = nU / n;
       S.metrics.scoreQ = nQ / n;
       S.metrics.净φ = nPhi / n;
-      if (ph === 0 && S.frame % 200 === 0) {
-        S.sim.pts = makeCloud(S.sim.rng, 26, -0.15, 0.05, 0.62, 0.48);
-      }
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
       const V = view2d(S);
-      const h = 0.28 + 0.5 * clamp(sl(S, "sig", 0.35), 0.04, 0.95);
+      const h = S.sim.h || 0.5;
+      const pts = S.sim.pts || [];
       heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
-      if (ph === 0) {
-        fieldArrows(ctx, V, T, (x, y) => {
-          const Q = kdeScore2d(S.sim.pts, x, y, h);
-          return { x: Q.sx, y: Q.sy };
-        }, T.c2, 8, 5, 16);
-      }
-      if (ph === 1) {
-        fieldArrows(ctx, V, T, (x, y) => {
-          const Q = kdeScore2d(S.sim.pts, x, y, S.sim.h);
-          return { x: -Q.sx, y: -Q.sy };
-        }, T.c6, 8, 5, 16);
-      }
-      if (ph === 2) {
-        fieldArrows(ctx, V, T, (x, y) => {
-          const P = post2d(x, y);
-          const Q = kdeScore2d(S.sim.pts, x, y, S.sim.h);
-          return { x: P.sx - Q.sx, y: P.sy - Q.sy };
-        }, T.c5, 8, 5, 16);
-      }
+      modeLabels(ctx, V, T);
+      const scQ = (x, y) => { const Q = kdeScore2d(pts, x, y, h); return { x: Q.sx, y: Q.sy }; };
+      const scU = (x, y) => { const Q = kdeScore2d(pts, x, y, h); return { x: -Q.sx, y: -Q.sy }; };
+      const scF = (x, y) => {
+        const P = post2d(x, y), Q = kdeScore2d(pts, x, y, h);
+        return { x: P.sx - Q.sx, y: P.sy - Q.sy };
+      };
+      if (ph === 0) fieldArrows(ctx, V, T, scQ, T.c2, 8, 5, 16);
+      if (ph === 1) fieldArrows(ctx, V, T, scU, T.c6, 8, 5, 16);
+      if (ph === 2) fieldArrows(ctx, V, T, scF, T.c5, 8, 5, 16);
       if (ph === 3) {
-        fieldArrows(ctx, V, T, (x, y) => {
-          const P = post2d(x, y);
-          const Q = kdeScore2d(S.sim.pts, x, y, S.sim.h);
-          return { x: P.sx - Q.sx, y: P.sy - Q.sy };
-        }, rgba(T.c5, 0.55), 8, 5, 10);
+        fieldArrows(ctx, V, T, scF, rgba(T.c5, 0.45), 8, 5, 8);
+        ctx.fillStyle = T.c3;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Q≈P 时净流≈0", V.x0 + 8, V.y0 + 16);
       }
-      dots(ctx, S.sim.pts, V, T.c5, 4);
-      const msgs = [
-        "Q 的得分场 ∇log Q",
-        "u* 正好反向",
-        "净 φ = ∇log P − ∇log Q",
-        "Q≈P 时净流趋于零",
-      ];
-      caption(ctx, S, T, msgs[ph], true);
+      dots(ctx, pts, V, T.c5, ph === 3 ? 5 : 4);
+      if (pts.length) {
+        ctx.strokeStyle = rgba(T.c7, 0.5);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(V.X(pts[0].x), V.Y(pts[0].y), Math.abs(V.X(pts[0].x + h) - V.X(pts[0].x)), 0, TWO);
+        ctx.stroke();
+      }
+      caption(ctx, S, T, ["Q 的得分场 ∇log Q", "u* 正好反向", "净 φ = ∇log P − ∇log Q", "Q≈P 时净流趋于零"][ph], true);
       legend(ctx, [
         { c: T.c2, lab: "∇log Q" },
         { c: T.c6, lab: "u* = −∇log Q" },
         { c: T.c5, lab: "净 φ" },
-      ], S.W - 140, 42, T);
+      ], S.W - 140, 46, T);
     },
   };
 
@@ -1508,61 +1517,46 @@
    * ============================================================ */
   OP.info_perturbation_field = {
     init(S) {
-      const rng = rngFn(111);
-      S.sim = { rng, pts: makeCloud(rng, 28, -0.05, 0.0, 0.42, 0.38), hist: [], step: 0 };
+      S.sim = {};
       bind(S, "info_perturbation_field");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const v = clamp(sl(S, "v", 0.7), 0.25, 1.9);
+      const pack = cachedSnaps(S, "infoPhi", v, 111, 24, 12, { mx: -0.05, my: 0, sx: 0.42, sy: 0.38 });
+      const pts = pack.snaps[[0, 0, 1, 3][ph]];
       S.sim.v = v;
-      if (ph === 0 && S.sim.step > 0 && S.frame % 90 === 0) {
-        S.sim.pts = makeCloud(S.sim.rng, 28, -0.05, 0.0, 0.42, 0.38);
-        S.sim.hist = [];
-        S.sim.step = 0;
-      }
+      S.sim.pts = pts;
+      S.sim.hist = pack.hist.slice(0, Math.max(2, [3, 8, 20, pack.hist.length][ph]));
       let nPhi = 0;
-      if (ph >= 2) {
-        const acc = rkhs(S.sim.pts, v);
-        S.sim.pts.forEach((p, i) => {
-          p.x += acc[i].x * dt * 0.85;
-          p.y += acc[i].y * dt * 0.85;
-          p.x = clamp(p.x, -2.4, 2.4);
-          p.y = clamp(p.y, -1.55, 1.55);
-          nPhi += hypot(acc[i].x, acc[i].y);
-        });
-        S.sim.step++;
-      } else {
-        S.sim.pts.forEach((p) => {
-          const P = post2d(p.x, p.y);
-          const Q = kdeScore2d(S.sim.pts, p.x, p.y, v);
-          nPhi += hypot(P.sx - Q.sx, P.sy - Q.sy);
-        });
-      }
-      const n = S.sim.pts.length;
-      const { L, R } = occModes(S.sim.pts);
-      push(S.sim.hist, nPhi / n, 70);
+      pts.forEach((p) => {
+        const P = post2d(p.x, p.y);
+        const Q = kdeScore2d(pts, p.x, p.y, v);
+        nPhi += hypot(P.sx - Q.sx, P.sy - Q.sy);
+      });
+      const { L, R } = occModes(pts);
       S.metrics.核带宽 = v;
-      S.metrics.φ范数 = nPhi / n;
-      S.metrics.左峰粒子 = L;
-      S.metrics.右峰粒子 = R;
+      S.metrics.φ范数 = nPhi / pts.length;
+      S.metrics.左峰粒子 = String(L);
+      S.metrics.右峰粒子 = String(R);
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const V = view2d(S, [-2.5, 2.5], [-1.65, 1.65], { r: 120 });
-      heat2d(ctx, V, T, T.c6, 24, 14);
+      const V = view2d(S, [-2.5, 2.5], [-1.65, 1.65], { r: 124 });
+      heat2d(ctx, V, T, T.c6);
       axes(ctx, V, T, "z₁", "z₂");
+      modeLabels(ctx, V, T);
       if (ph === 0) {
         ctx.fillStyle = T.c6;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("双峰后验 P(z|x)", V.x0 + 8, V.y0 + 16);
+        ctx.font = "13px sans-serif";
+        ctx.fillText("双峰后验 P(z|x)", V.x0 + 8, V.y0 + 18);
       }
       if (ph >= 1) {
-        dots(ctx, S.sim.pts, V, T.c2, ph === 1 ? 5 : 4);
+        dots(ctx, S.sim.pts, V, ph === 3 ? T.c5 : T.c2, ph === 1 ? 5.2 : 4);
         if (ph === 1) {
           ctx.fillStyle = T.c2;
           ctx.font = "12px sans-serif";
-          ctx.fillText("单团 Q 粒子（尚未分开）", V.x0 + 8, V.y0 + 16);
+          ctx.fillText("单团 Q 粒子（尚未分开）", V.x0 + 8, V.y0 + 18);
         }
       }
       if (ph >= 2) {
@@ -1570,14 +1564,13 @@
           const P = post2d(x, y);
           const Q = kdeScore2d(S.sim.pts, x, y, S.sim.v);
           return { x: P.sx - Q.sx, y: P.sy - Q.sy };
-        }, T.c5, 7, 5, ph === 3 ? 8 : 16);
+        }, T.c5, 7, 5, ph === 3 ? 7 : 16);
       }
-      spark(ctx, S.sim.hist, S.W - 126, 40, 108, 46, T.c5, T);
+      spark(ctx, S.sim.hist, S.W - 126, 44, 108, 46, T.c5, T);
       ctx.fillStyle = T.mu;
       ctx.font = "10px sans-serif";
-      ctx.fillText("‖φ‖ 下降", S.W - 126, 36);
-      const msgs = ["双峰后验 P", "单团 Q 粒子", "场把一部分拽向另一峰", "对齐后箭头变短"];
-      caption(ctx, S, T, msgs[ph], true);
+      ctx.fillText("‖φ‖ 随迭代下降", S.W - 126, 40);
+      caption(ctx, S, T, ["双峰后验 P", "单团 Q 粒子", "场把一部分拽向另一峰", "对齐后箭头变短"][ph], true);
     },
   };
 
@@ -1591,16 +1584,17 @@
     },
     tick(S) {
       const sig = clamp(sl(S, "sig", 0.35), 0.04, 0.95);
-      S.sim.sig = sig;
-      // p(z)=N(0,1), p(x|z)=N(θ z, σ²), x 观测
       const th = S.sim.th, x = S.sim.xobs, s2 = sig * sig;
-      // 在 z=0.6 处计算三支得分
       const z = 0.55;
-      S.sim.z = z;
-      S.sim.sprior = -z; // N(0,1)
+      S.sim.sig = sig;
+      S.sim.sprior = -z;
       S.sim.slike = th * (x - th * z) / s2;
       S.sim.spost = S.sim.sprior + S.sim.slike;
-      S.sim.spx = 0; // ∇_z log p(x) = 0
+      const prec = 1 + th * th / s2;
+      S.sim.post_m = (th * x / s2) / prec;
+      S.sim.post_s = 1 / Math.sqrt(prec);
+      S.sim.like_m = x / th;
+      S.sim.like_s = sig / Math.abs(th);
       S.metrics.σ = sig;
       S.metrics.先验得分 = S.sim.sprior;
       S.metrics.似然得分 = S.sim.slike;
@@ -1609,53 +1603,92 @@
     draw(ctx, S, T) {
       const { ph } = phof(S);
       const sig = S.sim.sig, th = S.sim.th, xobs = S.sim.xobs, s2 = sig * sig;
-      const V = view2d(S, [-2.4, 2.4], [-1.6, 1.6]);
-      axes(ctx, V, T, "z", "");
-      const prior = (z) => ({ x: -z, y: 0 });
-      const like = (z) => ({ x: th * (xobs - th * z) / s2, y: 0 });
-      const post = (z) => {
-        const a = prior(z), b = like(z);
-        return { x: a.x + b.x, y: 0 };
+      const top = padBox(S, { b: (S.H - 44) * 0.42, r: 8 });
+      const specs = [];
+      if (ph === 0 || ph === 2) specs.push({ fn: (z) => gauss(z, 0, 1), col: T.c2, fillA: ph === 0 ? 0.28 : 0.1, lw: ph === 0 ? 2.4 : 1.3 });
+      if (ph === 1 || ph === 2) specs.push({ fn: (z) => gauss(z, S.sim.like_m, S.sim.like_s), col: T.c6, fillA: ph === 1 ? 0.28 : 0.1, lw: ph === 1 ? 2.4 : 1.3 });
+      if (ph >= 2) specs.push({ fn: (z) => gauss(z, S.sim.post_m, S.sim.post_s), col: T.c5, fillA: 0.22, lw: 2.4 });
+      if (!specs.length) specs.push({ fn: (z) => gauss(z, 0, 1), col: T.c2, fillA: 0.1, lw: 1 });
+      const { X } = plotCurves(ctx, top, T, -2.6, 2.6, specs, "z");
+      ctx.fillStyle = T.mu;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("密度", top.x0 + 6, top.y0 + 12);
+      const bot = { x0: top.x0, y0: top.y1 + 22, x1: top.x1, y1: S.H - 44 };
+      ctx.strokeStyle = T.line;
+      ctx.strokeRect(bot.x0, bot.y0, bot.x1 - bot.x0, bot.y1 - bot.y0);
+      ctx.fillStyle = T.mu;
+      ctx.font = "10px sans-serif";
+      ctx.fillText("得分 ∇_z log", bot.x0 + 6, bot.y0 + 12);
+      const scoreFn = (z) => {
+        if (ph === 0) return -z;
+        if (ph === 1) return th * (xobs - th * z) / s2;
+        return -z + th * (xobs - th * z) / s2;
       };
-      // 1D 画在水平轴上的竖直偏移显示三种场
-      const drawField = (fn, col, yoff, lab, on) => {
-        ctx.globalAlpha = on ? 1 : 0.22;
-        for (let i = 0; i < 11; i++) {
-          const z = -2 + i * 0.4;
-          const f = fn(z);
-          const px = V.X(z), py = V.Y(0) + yoff;
-          arrow(ctx, px, py, clamp(f.x * 12, -28, 28), 0, col, on ? 2 : 1);
-          ctx.fillStyle = col;
-          ctx.beginPath();
-          ctx.arc(px, py, 2.4, 0, TWO);
-          ctx.fill();
+      let smax = 0.5;
+      for (let i = 0; i <= 40; i++) {
+        const a = Math.abs(scoreFn(-2.6 + 5.2 * i / 40));
+        if (a > smax) smax = a;
+      }
+      const Ys = (s) => {
+        const mid = (bot.y0 + bot.y1) / 2;
+        return mid - clamp(s / smax, -1, 1) * (bot.y1 - bot.y0) * 0.38;
+      };
+      ctx.strokeStyle = T.line;
+      ctx.beginPath();
+      ctx.moveTo(bot.x0, (bot.y0 + bot.y1) / 2);
+      ctx.lineTo(bot.x1, (bot.y0 + bot.y1) / 2);
+      ctx.stroke();
+      const drawScore = (fn, col, on, lab) => {
+        ctx.globalAlpha = on ? 1 : 0.2;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = on ? 2.2 : 1;
+        ctx.beginPath();
+        for (let i = 0; i <= 80; i++) {
+          const z = -2.6 + 5.2 * i / 80;
+          const py = Ys(fn(z));
+          if (i) ctx.lineTo(X(z), py); else ctx.moveTo(X(z), py);
+        }
+        ctx.stroke();
+        for (let i = 0; i < 9; i++) {
+          const z = -2 + i * 0.5;
+          arrow(ctx, X(z), Ys(0), 0, Ys(fn(z)) - Ys(0), col, on ? 1.6 : 1);
         }
         ctx.fillStyle = col;
         ctx.font = "11px sans-serif";
-        ctx.fillText(lab, V.x0 + 8, V.Y(0) + yoff - 10);
+        ctx.fillText(lab, bot.x0 + 8, bot.y1 - 6);
         ctx.globalAlpha = 1;
       };
-      if (ph === 0) drawField(prior, T.c2, -48, "先验得分 ∇log P(z) = −z  （拉回原点）", true);
-      else drawField(prior, T.c2, -48, "先验", ph === 2);
-      if (ph === 1) drawField(like, T.c6, 8, "似然得分 ∇log p(x|z)  （拉向解释 x 的 z）", true);
-      else if (ph >= 1) drawField(like, T.c6, 8, "似然", ph === 2);
-      if (ph >= 2) drawField(post, T.c5, 64, "后验 = 先验 + 似然", true);
-      if (ph === 3) {
-        panel(ctx, S.W * 0.55, 36, S.W * 0.42, 84, T, true);
-        ctx.fillStyle = T.c3;
-        ctx.font = "12px sans-serif";
-        ctx.fillText("∇_z log p(x) = 0  （不出现）", S.W * 0.55 + 10, 58);
+      if (ph === 0) drawScore((z) => -z, T.c2, true, "先验 −z （拉回 0）");
+      if (ph === 1) drawScore((z) => th * (xobs - th * z) / s2, T.c6, true, "似然 拉向 z≈x/θ");
+      if (ph === 2) {
+        drawScore((z) => -z, T.c2, false, "");
+        drawScore((z) => th * (xobs - th * z) / s2, T.c6, false, "");
+        drawScore((z) => -z + th * (xobs - th * z) / s2, T.c5, true, "后验 = 先验+似然");
         ctx.fillStyle = T.mu;
         ctx.font = "11px sans-serif";
-        ctx.fillText("边缘 p(x) 对隐变量 z 无梯度", S.W * 0.55 + 10, 78);
-        ctx.fillText("实现：解析先验 + 自动微分似然", S.W * 0.55 + 10, 96);
+        ctx.fillText("高斯后验 ⇒ 得分是直线", bot.x0 + 148, bot.y1 - 6);
       }
-      // 观测标记
+      if (ph === 3) {
+        drawScore((z) => -z + th * (xobs - th * z) / s2, T.c5, true, "后验得分");
+        panel(ctx, S.W * 0.56, 36, S.W * 0.4, 88, T, true);
+        ctx.fillStyle = T.c3;
+        ctx.font = "12px sans-serif";
+        ctx.fillText("∇_z log p(x) = 0  （划掉）", S.W * 0.56 + 10, 58);
+        ctx.strokeStyle = T.c6;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(S.W * 0.56 + 12, 54);
+        ctx.lineTo(S.W * 0.56 + S.W * 0.36, 54);
+        ctx.stroke();
+        ctx.fillStyle = T.mu;
+        ctx.font = "11px sans-serif";
+        ctx.fillText("边缘 p(x) 对 z 无梯度", S.W * 0.56 + 10, 80);
+        ctx.fillText("实现：解析先验 + 自动微分似然", S.W * 0.56 + 10, 98);
+      }
       ctx.fillStyle = T.c5;
       ctx.font = "11px sans-serif";
-      ctx.fillText("x = " + xobs.toFixed(2) + "  似然峰 z≈x/θ=" + (xobs / th).toFixed(2), V.x0 + 8, V.y1 - 6);
-      const msgs = ["先验得分拉回原点", "似然得分拉向能解释 x 的 z", "相加得后验得分", "p(x) 项导数为零"];
-      caption(ctx, S, T, msgs[ph], true);
+      ctx.fillText("x=" + xobs.toFixed(2) + "  似然峰 z≈" + (xobs / th).toFixed(2) + "  σ=" + sig.toFixed(2), top.x0 + 80, top.y0 + 12);
+      caption(ctx, S, T, ["先验得分拉回原点", "似然得分拉向能解释 x 的 z", "相加得后验得分", "p(x) 项导数为零"][ph], true);
     },
   };
 
@@ -1668,21 +1701,24 @@
       S.sim = { rng, pts: makeCloud(rng, 16, -0.2, 0, 0.55, 0.42) };
       bind(S, "rkhs_ansatz_control");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const v = clamp(sl(S, "v", 0.7), 0.25, 1.9);
+      const pack = cachedSnaps(S, "rkhsA", v, 131, 16, 10, { mx: -0.2, my: 0, sx: 0.55, sy: 0.42 });
+      const pts = pack.snaps[ph === 3 ? 2 : 0];
       S.sim.v = v;
-      const n = S.sim.pts.length;
+      S.sim.pts = pts;
+      const n = pts.length;
       const ih = 1 / (v * v);
       const acc = new Array(n);
       let tScore = 0, tRep = 0;
       for (let i = 0; i < n; i++) {
         let sx = 0, sy = 0, rx = 0, ry = 0;
         for (let j = 0; j < n; j++) {
-          const dx = S.sim.pts[i].x - S.sim.pts[j].x;
-          const dy = S.sim.pts[i].y - S.sim.pts[j].y;
+          const dx = pts[i].x - pts[j].x;
+          const dy = pts[i].y - pts[j].y;
           const k = Math.exp(-0.5 * (dx * dx + dy * dy) * ih);
-          const sj = post2d(S.sim.pts[j].x, S.sim.pts[j].y);
+          const sj = post2d(pts[j].x, pts[j].y);
           sx += k * sj.sx;
           sy += k * sj.sy;
           rx += k * dx * ih;
@@ -1693,17 +1729,6 @@
         tRep += hypot(acc[i].rx, acc[i].ry);
       }
       S.sim.acc = acc;
-      if (ph >= 3) {
-        S.sim.pts.forEach((p, i) => {
-          p.x += acc[i].x * dt * 0.9;
-          p.y += acc[i].y * dt * 0.9;
-          p.x = clamp(p.x, -2.4, 2.4);
-          p.y = clamp(p.y, -1.55, 1.55);
-        });
-      }
-      if (ph === 0 && S.frame % 160 === 0) {
-        S.sim.pts = makeCloud(S.sim.rng, 16, -0.2, 0, 0.55, 0.42);
-      }
       S.metrics.核带宽 = v;
       S.metrics.得分输送 = tScore / n;
       S.metrics.排斥项 = tRep / n;
@@ -1785,7 +1810,18 @@
       const { ph } = phof(S);
       const eps = clamp(sl(S, "eps", 0.2), 0.05, 0.7);
       const uamp = clamp(sl(S, "uamp", 0.4), 0, 1.3);
-      const eUse = ph === 2 ? Math.min(0.12, eps) : ph === 3 ? Math.max(eps, 0.45) : eps;
+      const eUse = ph === 2 ? clamp(0.045 + 0.22 * (eps / 0.7), 0.045, 0.22)
+        : ph === 3 ? Math.max(eps, 0.48)
+        : eps;
+      const key = ph + ":" + eUse.toFixed(3) + ":" + uamp.toFixed(2);
+      if (S.sim._ek === key) {
+        S.metrics.ε = eUse;
+        S.metrics.控制强度 = uamp;
+        S.metrics.轨迹误差 = S.sim.err;
+        S.metrics.发散 = S.sim.blow ? 1 : 0;
+        return;
+      }
+      S.sim._ek = key;
       const z0 = { x: 1.55, y: 0.15 };
       const tru = [z0];
       let z = { x: z0.x, y: z0.y };
@@ -1876,7 +1912,12 @@
       ], S.W - 120, 42, T);
       ctx.fillStyle = T.tx;
       ctx.font = "11px sans-serif";
-      ctx.fillText("误差 " + (S.sim.err || 0).toFixed(3), S.W - 120, 96);
+      ctx.fillStyle = T.c5;
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText("ε = " + (S.sim.eUse || 0).toFixed(2), S.W - 120, 96);
+      ctx.fillStyle = T.tx;
+      ctx.font = "11px sans-serif";
+      ctx.fillText("误差 " + (S.sim.err || 0).toFixed(3), S.W - 120, 114);
     },
   };
 
@@ -1885,53 +1926,29 @@
    * ============================================================ */
   OP.info_particle_update = {
     init(S) {
-      const rng = rngFn(151);
-      S.sim = {
-        rng,
-        pts: makeCloud(rng, 30, 0, 0, 0.85, 0.7),
-        tstep: 0,
-        histKL: [],
-        histL: [],
-        done: false,
-      };
+      S.sim = {};
       bind(S, "info_particle_update");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const v = clamp(sl(S, "v", 0.7), 0.25, 1.9);
-      if (ph === 0 && S.sim.tstep > 8) {
-        S.sim.pts = makeCloud(S.sim.rng, 30, 0, 0, 0.85, 0.7);
-        S.sim.tstep = 0;
-        S.sim.histKL = [];
-        S.sim.histL = [];
-        S.sim.done = false;
-      }
-      if (ph >= 1 && ph < 3) {
-        const acc = rkhs(S.sim.pts, v);
-        S.sim.pts.forEach((p, i) => {
-          p.x += acc[i].x * dt * 1.05;
-          p.y += acc[i].y * dt * 1.05;
-          p.x = clamp(p.x, -2.45, 2.45);
-          p.y = clamp(p.y, -1.6, 1.6);
-        });
-        S.sim.tstep++;
-      }
-      if (ph === 3) S.sim.done = true;
-      const { L, R } = occModes(S.sim.pts);
-      // 用粒子对数密度差近似 KL：E[log Q - log P]
+      const pack = cachedSnaps(S, "infoAlg", v, 151, 26, 12, { mx: 0, my: 0, sx: 0.85, sy: 0.7 });
+      const pts = pack.snaps[[0, 1, 2, 3][ph]];
+      S.sim.pts = pts;
+      S.sim.histKL = pack.hist.slice(0, Math.max(2, [3, 14, 26, pack.hist.length][ph]));
+      S.sim.tstep = [0, 12, 24, 36][ph];
+      const { L, R } = occModes(pts);
       let kl = 0;
-      S.sim.pts.forEach((p) => {
-        const Q = kdeScore2d(S.sim.pts, p.x, p.y, v);
+      pts.forEach((p) => {
+        const Q = kdeScore2d(pts, p.x, p.y, v);
         const P = post2d(p.x, p.y);
         kl += Math.log(Q.q + 1e-12) - Math.log(P.p + 1e-12);
       });
-      kl /= S.sim.pts.length;
-      push(S.sim.histKL, kl, 70);
-      push(S.sim.histL, L, 70);
+      kl /= pts.length;
       S.metrics.核带宽 = v;
-      S.metrics.步数 = S.sim.tstep;
+      S.metrics.步数 = String(S.sim.tstep);
       S.metrics.KL近似 = kl;
-      S.metrics.右峰占比 = R / S.sim.pts.length;
+      S.metrics.右峰占比 = R / pts.length;
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
@@ -1971,73 +1988,59 @@
    * ============================================================ */
   OP.info_em_m_step = {
     init(S) {
-      const rng = rngFn(161);
-      // 观测 x，潜变量 z 粒子，解码 x̂ = θ z
-      const x = 1.35;
-      const zs = [];
-      for (let i = 0; i < 24; i++) zs.push(0.4 + 0.55 * randn(rng));
-      S.sim = { rng, x, zs, th: 0.35, histL: [], histTh: [], round: 0 };
+      S.sim = { x: 1.35 };
       bind(S, "info_em_m_step");
     },
-    tick(S, dt) {
+    tick(S) {
       const { ph } = phof(S);
       const rate = clamp(sl(S, "rate", 1), 0.2, 2);
-      const sig = 0.35;
-      const x = S.sim.x;
-      // E 步：粒子沿后验得分（固定 θ）
-      if (ph === 0 || ph === 3) {
-        S.sim.zs.forEach((z, i) => {
-          const scPrior = -z;
-          const scLike = S.sim.th * (x - S.sim.th * z) / (sig * sig);
-          const phi = scPrior + scLike;
-          S.sim.zs[i] = clamp(z + phi * dt * 0.8, -2.5, 2.5);
+      const x = S.sim.x, sig = 0.35, s2 = sig * sig;
+      const sampleZ = (thv, seed) => {
+        const prec = 1 + thv * thv / s2;
+        const mz = (thv * x / s2) / prec;
+        const sz = 1 / Math.sqrt(prec);
+        const rng = rngFn(161 + seed);
+        const zs = [];
+        for (let i = 0; i < 20; i++) zs.push(mz + sz * randn(rng));
+        return { zs, mz, sz };
+      };
+      let th = 0.32;
+      const histTh = [th], histL = [], snaps = [];
+      for (let k = 0; k < 8; k++) {
+        const pack = sampleZ(th, k);
+        let g = 0, ll = 0, recon = 0;
+        pack.zs.forEach((z) => {
+          g += (x - th * z) * z / s2;
+          const xh = th * z;
+          ll += -0.5 * (x - xh) * (x - xh) / s2;
+          recon += (x - xh) * (x - xh);
         });
+        g /= pack.zs.length;
+        ll /= pack.zs.length;
+        histL.push(ll);
+        snaps.push({ th, zs: pack.zs, ll, recon: recon / pack.zs.length });
+        th = clamp(th + 0.12 * g, 0.05, 2.6);
+        histTh.push(th);
       }
-      // M 步：θ ← θ + η mean( (x-θz) z / σ² )
-      if (ph === 1 || ph === 2) {
-        let g = 0;
-        S.sim.zs.forEach((z) => {
-          g += (x - S.sim.th * z) * z / (sig * sig);
-        });
-        g /= S.sim.zs.length;
-        S.sim.th += rate * 0.15 * g * dt * 8;
-        S.sim.th = clamp(S.sim.th, -0.2, 2.8);
-      }
-      let recon = 0;
-      S.sim.zs.forEach((z) => {
-        const xh = S.sim.th * z;
-        recon += (x - xh) * (x - xh);
-      });
-      recon /= S.sim.zs.length;
-      let ll = 0;
-      S.sim.zs.forEach((z) => {
-        const xh = S.sim.th * z;
-        ll += -0.5 * (x - xh) * (x - xh) / (sig * sig);
-      });
-      ll /= S.sim.zs.length;
-      push(S.sim.histL, ll, 70);
-      push(S.sim.histTh, S.sim.th, 70);
-      S.metrics.θ = S.sim.th;
-      S.metrics.重建MSE = recon;
-      S.metrics.似然 = ll;
+      const idx = clamp(Math.round([0, 1, 3, 6][ph] * rate), 0, snaps.length - 1);
+      const cur = snaps[idx];
+      S.sim.th = cur.th;
+      S.sim.zs = cur.zs;
+      S.sim.histTh = histTh;
+      S.sim.histL = histL;
+      S.sim.emIdx = idx;
+      S.metrics.θ = cur.th;
+      S.metrics.重建MSE = cur.recon;
+      S.metrics.似然 = cur.ll;
       S.metrics.提升速度 = rate;
     },
     draw(ctx, S, T) {
       const { ph } = phof(S);
-      const rate = clamp(sl(S, "rate", 1), 0.2, 2);
-      const idx = Math.min(S.sim.histTh.length - 1, Math.round((ph === 0 ? 2 : ph === 1 ? 12 : ph === 2 ? 28 : 46) * rate));
-      const th = S.sim.histTh[idx];
-      const x = S.sim.x, sig = 0.35;
-      const prec = 1 + th * th / (sig * sig);
-      const mz = (th * x / (sig * sig)) / prec;
-      const sz = 1 / Math.sqrt(prec);
-      const rng = rngFn(900 + ph * 17);
-      const zs = [];
-      for (let i = 0; i < 20; i++) zs.push(mz + sz * randn(rng));
+      const th = S.sim.th, x = S.sim.x, zs = S.sim.zs || [];
       const mid = S.W * 0.5;
-      panel(ctx, 16, 30, mid - 24, S.H - 66, T, ph === 0 || ph === 3);
-      panel(ctx, mid, 30, S.W - mid - 16, S.H - 66, T, ph === 1 || ph === 2);
-      const B = { x0: 44, y0: 48, x1: mid - 36, y1: S.H - 48 };
+      panel(ctx, 16, 32, mid - 24, S.H - 76, T, ph === 0 || ph === 3);
+      panel(ctx, mid, 32, S.W - mid - 16, S.H - 76, T, ph === 1 || ph === 2);
+      const B = { x0: 44, y0: 50, x1: mid - 36, y1: S.H - 52 };
       const X = (z) => B.x0 + (z + 2.2) / 4.4 * (B.x1 - B.x0);
       const Y = (xv) => B.y1 - (xv + 0.4) / 2.6 * (B.y1 - B.y0);
       ctx.strokeStyle = T.line;
@@ -2053,7 +2056,7 @@
       ctx.font = "11px sans-serif";
       ctx.fillText("观测 x", B.x1 - 54, Y(x) - 6);
       ctx.strokeStyle = T.c3;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.4;
       ctx.beginPath();
       ctx.moveTo(X(-2), Y(th * -2));
       ctx.lineTo(X(2), Y(th * 2));
@@ -2065,37 +2068,44 @@
         ctx.arc(X(z), Y(xh), 4, 0, TWO);
         ctx.fill();
         if (ph === 0 || ph === 3) {
-          ctx.strokeStyle = rgba(T.c5, 0.45);
+          ctx.strokeStyle = rgba(T.c5, 0.5);
           ctx.beginPath();
           ctx.moveTo(X(z), Y(xh));
           ctx.lineTo(X(z), Y(x));
           ctx.stroke();
         }
-        if (ph === 1) {
-          arrow(ctx, X(z), Y(xh), 0, (Y(x) - Y(xh)) * 0.45, T.c6, 1.2);
-        }
+        if (ph === 1) arrow(ctx, X(z), Y(xh), 0, (Y(x) - Y(xh)) * 0.5, T.c6, 1.3);
       });
       ctx.fillStyle = T.tx;
       ctx.font = "11px sans-serif";
       ctx.fillText("z →  x̂=θz", B.x0 + 6, B.y0 + 14);
-      spark(ctx, S.sim.histL.slice(0, idx + 1), mid + 16, 50, S.W - mid - 40, 70, T.c4, T);
+      spark(ctx, S.sim.histL, mid + 16, 52, S.W - mid - 40, 64, T.c4, T);
       ctx.fillStyle = T.mu;
       ctx.font = "11px sans-serif";
-      ctx.fillText("平均对数似然", mid + 16, 46);
-      spark(ctx, S.sim.histTh.slice(0, idx + 1), mid + 16, 150, S.W - mid - 40, 70, T.c7, T);
-      ctx.fillText("θ 轨迹", mid + 16, 146);
+      ctx.fillText("平均对数似然", mid + 16, 48);
+      spark(ctx, S.sim.histTh, mid + 16, 148, S.W - mid - 40, 64, T.c7, T);
+      ctx.fillText("θ 轨迹", mid + 16, 144);
+      if (S.sim.histTh && S.sim.histTh.length > 1) {
+        const i0 = clamp(S.sim.emIdx || 0, 0, S.sim.histTh.length - 1);
+        const px = mid + 16 + (S.W - mid - 40) * i0 / (S.sim.histTh.length - 1);
+        ctx.strokeStyle = T.c5;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 148);
+        ctx.lineTo(px, 212);
+        ctx.stroke();
+      }
       ctx.fillStyle = T.tx;
-      ctx.font = "12px sans-serif";
-      ctx.fillText("θ = " + th.toFixed(3), mid + 16, 246);
+      ctx.font = "13px sans-serif";
+      ctx.fillText("θ = " + th.toFixed(3), mid + 16, 236);
       ctx.fillStyle = T.mu;
-      ctx.fillText(ph <= 1 ? "E 步：粒子对齐后验" : "M 步：粒子平均似然梯度", mid + 16, 266);
-      const msgs = [
-        "粒子已对齐后验",
-        "用粒子平均似然梯度",
-        "θ 更新，解码更好",
-        "下一轮 E 步后验更准",
-      ];
-      caption(ctx, S, T, msgs[ph], true);
+      ctx.font = "11px sans-serif";
+      ctx.fillText(ph <= 1 ? "E 步：粒子对齐后验" : "M 步：粒子平均似然梯度", mid + 16, 256);
+      if (ph === 3) {
+        ctx.fillStyle = T.c3;
+        ctx.fillText("新 E 步：后验更尖、重建残差更短", mid + 16, 274);
+      }
+      caption(ctx, S, T, ["粒子已对齐后验", "用粒子平均似然梯度", "θ 更新，解码更好", "下一轮 E 步后验更准"][ph], true);
     },
   };
 
@@ -2192,7 +2202,9 @@
       };
       cells.forEach((c, i) => {
         const p = pos[i];
-        panel(ctx, p.x, p.y, gw - 8, gh - 12, T, i === ph || (ph === 3 && i === 3));
+        const on = i === ph;
+        ctx.globalAlpha = on ? 1 : 0.38;
+        panel(ctx, p.x, p.y, gw - 8, gh - 12, T, on);
         const box = { x: p.x, y: p.y + 28, w: gw - 8, h: gh - 48 };
         ctx.fillStyle = (i === ph || (ph === 3 && i === 3)) ? T.c5 : T.tx;
         ctx.font = "bold 12px sans-serif";
@@ -2223,13 +2235,14 @@
           S.sim.sbs.forEach((path, k) => plot(path, box, [T.c2, T.c3, T.c7][k], 1.3, sigAmp));
         }
         if (i === 3) {
-          S.sim.odes.forEach((path, k) => plot(path, box, T.c5, 1.8));
-          if (ph === 3) {
+          S.sim.odes.forEach((path) => plot(path, box, T.c5, 1.8));
+          if (on) {
             ctx.strokeStyle = T.c5;
-            ctx.lineWidth = 2.4;
+            ctx.lineWidth = 2.6;
             ctx.strokeRect(p.x + 2, p.y + 2, gw - 12, gh - 16);
           }
         }
+        ctx.globalAlpha = 1;
       });
       const msgs = [
         "路径空间：整条曲线是一个点",
@@ -2240,5 +2253,44 @@
       caption(ctx, S, T, msgs[ph], true);
     },
   };
+
+  /* 包装：init 后立刻 tick；暂停时滑块/步骤变化会重算，避免空白或旧帧 */
+  const CH4_IDS = [
+    "particle_quantization", "dirac_delta", "particle_ode", "monte_carlo_expectation",
+    "control_affine_perturbation", "finite_horizon_oc_cost", "infinite_horizon_oc_cost",
+    "hamiltonian_infinite_horizon", "adjoint_state", "optimal_control_law",
+    "info_perturbation_field", "posterior_score_decomposition", "rkhs_ansatz_control",
+    "forward_euler_discretization", "info_particle_update", "info_em_m_step",
+    "path_space_relaxation_choice",
+  ];
+  CH4_IDS.forEach(function (id) {
+    const orig = OP[id];
+    if (!orig || orig.__ch4wrap) return;
+    OP[id] = {
+      __ch4wrap: true,
+      init(S) {
+        orig.init(S);
+        bind(S, id);
+        try { orig.tick(S, 0.02); } catch (e) { S.metrics.err = String(e && e.message || e); }
+      },
+      tick(S, dt) {
+        try { orig.tick(S, dt || 0); } catch (e) { S.metrics.err = String(e && e.message || e); }
+      },
+      draw(ctx, S, T) {
+        try {
+          const sig = JSON.stringify(S.sliders || {}) + "|" + S.phase;
+          if (S.sim && S.sim._sigDraw !== sig) {
+            S.sim._sigDraw = sig;
+            try { orig.tick(S, 0.02); } catch (e0) {}
+          }
+          orig.draw(ctx, S, T);
+        } catch (e) {
+          ctx.fillStyle = T.c6;
+          ctx.font = "12px sans-serif";
+          ctx.fillText("动画错误: " + (e && e.message || e), 16, 42);
+        }
+      },
+    };
+  });
 
 })(window);
